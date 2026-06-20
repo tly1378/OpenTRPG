@@ -17,7 +17,10 @@
           上传图片
           <input id="image-upload" type="file" accept="image/*" multiple />
         </label>
-        <span class="hint">拖入图片到画布 · WASD 移动相机 · 拖拽图片移动 · 角点/边点缩放 · Shift 等比缩放 · 顶部手柄旋转</span>
+        <button id="add-token-button" type="button" class="tool-button" aria-pressed="false">放置角色</button>
+        <button id="wall-mode-button" type="button" class="tool-button" aria-pressed="false">编辑阻挡边</button>
+        <button id="clear-walls-button" type="button" class="tool-button subtle-button">清空阻挡边</button>
+        <span class="hint">拖图做背景 · 放置角色 · 编辑阻挡边 · 拖拽角色按路径移动 · Shift 等比缩放背景图</span>
       </header>
 
       <div id="drop-overlay" class="drop-overlay" hidden>松开以上传图片</div>

@@ -36,6 +36,10 @@ button {
   cursor: grabbing;
 }
 
+#world-canvas.is-wall-mode {
+  cursor: crosshair;
+}
+
 .toolbar {
   position: fixed;
   top: 16px;
@@ -44,6 +48,7 @@ button {
   z-index: 10;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   pointer-events: none;
 }
@@ -69,6 +74,10 @@ button {
 .tool-button.is-active {
   border-color: rgb(104 191 255 / 70%);
   background: rgb(22 45 66 / 92%);
+}
+
+.tool-button.subtle-button {
+  color: #cbd5e1;
 }
 
 .upload-button input {

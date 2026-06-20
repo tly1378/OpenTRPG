@@ -5,12 +5,19 @@ type Vector2 = {
   y: number;
 };
 
+type Cell = {
+  x: number;
+  y: number;
+};
+
 type ClientPointEvent = {
   clientX: number;
   clientY: number;
 };
 
 type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
+type ToolMode = "select" | "add-token" | "wall";
+type WallEdgeType = "vertical" | "horizontal";
 
 type SceneImage = {
   id: string;
@@ -24,6 +31,20 @@ type SceneImage = {
   originalHeight: number;
   rotation: number;
   z: number;
+};
+
+type SceneToken = {
+  id: string;
+  name: string;
+  cell: Cell;
+  color: string;
+};
+
+type MovingToken = {
+  tokenId: string;
+  path: Cell[];
+  startedAt: number;
+  duration: number;
 };
 
 type Interaction =
@@ -56,6 +77,14 @@ type Interaction =
       pointerId: number;
       startPointer: Vector2;
       startCamera: Vector2;
+    }
+  | {
+      type: "drag-token";
+      tokenId: string;
+      pointerId: number;
+      startCell: Cell;
+      targetCell: Cell;
+      path: Cell[];
     };
 
 function mustQuery<T extends Element>(selector: string): T {
@@ -71,6 +100,9 @@ function mustQuery<T extends Element>(selector: string): T {
 const canvas = mustQuery<HTMLCanvasElement>("#world-canvas");
 const moveCameraButton = mustQuery<HTMLButtonElement>("#move-camera-button");
 const uploadInput = mustQuery<HTMLInputElement>("#image-upload");
+const addTokenButton = mustQuery<HTMLButtonElement>("#add-token-button");
+const wallModeButton = mustQuery<HTMLButtonElement>("#wall-mode-button");
+const clearWallsButton = mustQuery<HTMLButtonElement>("#clear-walls-button");
 const dropOverlay = mustQuery<HTMLDivElement>("#drop-overlay");
 const selectionPanel = mustQuery<HTMLDivElement>("#selection-panel");
 const selectionTitle = mustQuery<HTMLDivElement>("#selection-title");
@@ -105,18 +137,31 @@ const pointer = {
 
 const keys = new Set<string>();
 const sceneImages: SceneImage[] = [];
+const sceneTokens: SceneToken[] = [];
+const blockedVerticalEdges = new Set<string>();
+const blockedHorizontalEdges = new Set<string>();
 
 let selectedImageId: string | null = null;
+let selectedTokenId: string | null = null;
 let interaction: Interaction | null = null;
 let cameraMoveMode = false;
+let toolMode: ToolMode = "select";
 let lastFrameTime = performance.now();
 let nextZ = 1;
+let nextTokenIndex = 1;
 let dragDepth = 0;
+let movingToken: MovingToken | null = null;
+let previewTokenPosition: Vector2 | null = null;
+let previewPath: Cell[] = [];
 
 const HANDLE_RADIUS = 8;
 const ROTATE_HANDLE_DISTANCE = 44;
 const MIN_IMAGE_SIZE = 24;
 const CAMERA_SPEED = 680;
+const GRID_CELL_SIZE = 80;
+const TOKEN_RADIUS = 24;
+const TOKEN_COLORS = ["#f97316", "#22c55e", "#60a5fa", "#e879f9", "#facc15", "#fb7185"];
+const TOKEN_STEP_ANIMATION_MS = 180;
 
 function screenSize(): Vector2 {
   return {
@@ -165,8 +210,57 @@ function distance(a: Vector2, b: Vector2): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+function sameCell(a: Cell, b: Cell): boolean {
+  return a.x === b.x && a.y === b.y;
+}
+
+function cellKey(cell: Cell): string {
+  return `${cell.x},${cell.y}`;
+}
+
+function edgeKey(edge: { x: number; y: number }): string {
+  return `${edge.x},${edge.y}`;
+}
+
+function worldToCell(point: Vector2): Cell {
+  return {
+    x: Math.floor(point.x / GRID_CELL_SIZE),
+    y: Math.floor(point.y / GRID_CELL_SIZE),
+  };
+}
+
+function cellCenter(cell: Cell): Vector2 {
+  return {
+    x: (cell.x + 0.5) * GRID_CELL_SIZE,
+    y: (cell.y + 0.5) * GRID_CELL_SIZE,
+  };
+}
+
+function blockedEdgeSet(type: WallEdgeType): Set<string> {
+  return type === "vertical" ? blockedVerticalEdges : blockedHorizontalEdges;
+}
+
+function hasBlockedEdge(type: WallEdgeType, x: number, y: number): boolean {
+  return blockedEdgeSet(type).has(edgeKey({ x, y }));
+}
+
+function toggleBlockedEdge(type: WallEdgeType, x: number, y: number): void {
+  const set = blockedEdgeSet(type);
+  const key = edgeKey({ x, y });
+
+  if (set.has(key)) {
+    set.delete(key);
+  } else {
+    set.add(key);
+  }
+}
+
 function getSelectedImage(): SceneImage | null {
   return sceneImages.find((image) => image.id === selectedImageId) ?? null;
+}
+
+function getSelectedToken(): SceneToken | null {
+  return sceneTokens.find((token) => token.id === selectedTokenId) ?? null;
 }
 
 function normalizeZIndexes(): void {
@@ -199,8 +293,7 @@ function drawGrid(): void {
   const size = screenSize();
   const topLeft = screenToWorld({ x: 0, y: 0 });
   const bottomRight = screenToWorld(size);
-  const baseStep = 64;
-  const step = baseStep * Math.max(1, Math.pow(2, Math.floor(Math.log2(1 / camera.zoom))));
+  const step = GRID_CELL_SIZE;
   const majorStep = step * 5;
 
   ctx.save();
@@ -240,6 +333,286 @@ function drawGrid(): void {
   ctx.font = "12px ui-sans-serif, system-ui, sans-serif";
   ctx.fillText("(0, 0)", origin.x + 8, origin.y - 8);
   ctx.restore();
+}
+
+function canMoveCardinal(from: Cell, to: Cell): boolean {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+
+  if (Math.abs(dx) + Math.abs(dy) !== 1) {
+    return false;
+  }
+
+  if (dx === 1) return !hasBlockedEdge("vertical", from.x + 1, from.y);
+  if (dx === -1) return !hasBlockedEdge("vertical", from.x, from.y);
+  if (dy === 1) return !hasBlockedEdge("horizontal", from.x, from.y + 1);
+
+  return !hasBlockedEdge("horizontal", from.x, from.y);
+}
+
+function canMoveBetween(from: Cell, to: Cell): boolean {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+
+  if (Math.abs(dx) + Math.abs(dy) === 1) {
+    return canMoveCardinal(from, to);
+  }
+
+  if (Math.abs(dx) === 1 && Math.abs(dy) === 1) {
+    const horizontalFirst = { x: from.x + dx, y: from.y };
+    const verticalFirst = { x: from.x, y: from.y + dy };
+
+    return (
+      canMoveCardinal(from, horizontalFirst) &&
+      canMoveCardinal(horizontalFirst, to) &&
+      canMoveCardinal(from, verticalFirst) &&
+      canMoveCardinal(verticalFirst, to)
+    );
+  }
+
+  return false;
+}
+
+function occupiedByToken(cell: Cell, exceptTokenId?: string): boolean {
+  return sceneTokens.some((token) => token.id !== exceptTokenId && sameCell(token.cell, cell));
+}
+
+function getNeighborCells(cell: Cell, tokenId: string): Array<{ cell: Cell; cost: number }> {
+  const neighbors: Array<{ cell: Cell; cost: number }> = [];
+
+  for (let dx = -1; dx <= 1; dx += 1) {
+    for (let dy = -1; dy <= 1; dy += 1) {
+      if (dx === 0 && dy === 0) continue;
+
+      const next = { x: cell.x + dx, y: cell.y + dy };
+      if (occupiedByToken(next, tokenId) || !canMoveBetween(cell, next)) {
+        continue;
+      }
+
+      neighbors.push({
+        cell: next,
+        cost: Math.abs(dx) + Math.abs(dy) === 2 ? Math.SQRT2 : 1,
+      });
+    }
+  }
+
+  return neighbors;
+}
+
+function findPath(start: Cell, target: Cell, tokenId: string): Cell[] {
+  if (sameCell(start, target)) {
+    return [start];
+  }
+
+  const queue = new Map<string, { cell: Cell; priority: number }>();
+  const cameFrom = new Map<string, string>();
+  const costs = new Map<string, number>();
+  const cells = new Map<string, Cell>();
+  const startKey = cellKey(start);
+  const targetKey = cellKey(target);
+  const margin = 24;
+  const minX = Math.min(start.x, target.x) - margin;
+  const maxX = Math.max(start.x, target.x) + margin;
+  const minY = Math.min(start.y, target.y) - margin;
+  const maxY = Math.max(start.y, target.y) + margin;
+
+  queue.set(startKey, { cell: start, priority: 0 });
+  costs.set(startKey, 0);
+  cells.set(startKey, start);
+
+  while (queue.size > 0) {
+    const current = [...queue.values()].sort((a, b) => a.priority - b.priority)[0];
+    const currentKey = cellKey(current.cell);
+    queue.delete(currentKey);
+
+    if (currentKey === targetKey) {
+      break;
+    }
+
+    for (const neighbor of getNeighborCells(current.cell, tokenId)) {
+      if (neighbor.cell.x < minX || neighbor.cell.x > maxX || neighbor.cell.y < minY || neighbor.cell.y > maxY) {
+        continue;
+      }
+
+      const neighborKey = cellKey(neighbor.cell);
+      const nextCost = (costs.get(currentKey) ?? 0) + neighbor.cost;
+
+      if (!costs.has(neighborKey) || nextCost < (costs.get(neighborKey) ?? Number.POSITIVE_INFINITY)) {
+        costs.set(neighborKey, nextCost);
+        cameFrom.set(neighborKey, currentKey);
+        cells.set(neighborKey, neighbor.cell);
+        queue.set(neighborKey, {
+          cell: neighbor.cell,
+          priority: nextCost + distance(neighbor.cell, target),
+        });
+      }
+    }
+  }
+
+  if (!cameFrom.has(targetKey)) {
+    return [];
+  }
+
+  const path: Cell[] = [target];
+  let currentKey = targetKey;
+
+  while (currentKey !== startKey) {
+    const previousKey = cameFrom.get(currentKey);
+    if (!previousKey) {
+      return [];
+    }
+
+    const previousCell = cells.get(previousKey);
+    if (!previousCell) {
+      return [];
+    }
+
+    path.push(previousCell);
+    currentKey = previousKey;
+  }
+
+  return path.reverse();
+}
+
+function nearestEditableEdge(worldPoint: Vector2): { type: WallEdgeType; x: number; y: number } {
+  const cell = worldToCell(worldPoint);
+  const localX = worldPoint.x - cell.x * GRID_CELL_SIZE;
+  const localY = worldPoint.y - cell.y * GRID_CELL_SIZE;
+  const left = localX;
+  const right = GRID_CELL_SIZE - localX;
+  const bottom = localY;
+  const top = GRID_CELL_SIZE - localY;
+  const minDistance = Math.min(left, right, bottom, top);
+
+  if (minDistance === left) return { type: "vertical", x: cell.x, y: cell.y };
+  if (minDistance === right) return { type: "vertical", x: cell.x + 1, y: cell.y };
+  if (minDistance === bottom) return { type: "horizontal", x: cell.x, y: cell.y };
+
+  return { type: "horizontal", x: cell.x, y: cell.y + 1 };
+}
+
+function drawWalls(): void {
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineWidth = Math.max(4, 6 * camera.zoom);
+  ctx.strokeStyle = "#f97316";
+
+  for (const key of blockedVerticalEdges) {
+    const [x, y] = key.split(",").map(Number);
+    const a = worldToScreen({ x: x * GRID_CELL_SIZE, y: y * GRID_CELL_SIZE });
+    const b = worldToScreen({ x: x * GRID_CELL_SIZE, y: (y + 1) * GRID_CELL_SIZE });
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  for (const key of blockedHorizontalEdges) {
+    const [x, y] = key.split(",").map(Number);
+    const a = worldToScreen({ x: x * GRID_CELL_SIZE, y: y * GRID_CELL_SIZE });
+    const b = worldToScreen({ x: (x + 1) * GRID_CELL_SIZE, y: y * GRID_CELL_SIZE });
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawCellHighlight(cell: Cell, color: string): void {
+  const topLeft = worldToScreen({ x: cell.x * GRID_CELL_SIZE, y: (cell.y + 1) * GRID_CELL_SIZE });
+  const bottomRight = worldToScreen({ x: (cell.x + 1) * GRID_CELL_SIZE, y: cell.y * GRID_CELL_SIZE });
+
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.fillRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+  ctx.restore();
+}
+
+function drawPath(path: Cell[]): void {
+  if (path.length === 0) {
+    return;
+  }
+
+  ctx.save();
+  ctx.strokeStyle = "#38bdf8";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 8]);
+  ctx.beginPath();
+  path.forEach((cell, index) => {
+    const point = worldToScreen(cellCenter(cell));
+    if (index === 0) ctx.moveTo(point.x, point.y);
+    else ctx.lineTo(point.x, point.y);
+  });
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  for (const cell of path) {
+    const point = worldToScreen(cellCenter(cell));
+    ctx.fillStyle = "rgb(56 189 248 / 0.9)";
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function tokenRenderPosition(token: SceneToken): Vector2 {
+  if (interaction?.type === "drag-token" && interaction.tokenId === token.id && previewTokenPosition) {
+    return previewTokenPosition;
+  }
+
+  if (movingToken?.tokenId === token.id) {
+    return interpolateMovingToken(movingToken);
+  }
+
+  return cellCenter(token.cell);
+}
+
+function drawTokens(): void {
+  for (const token of sceneTokens) {
+    const worldPoint = tokenRenderPosition(token);
+    const screenPoint = worldToScreen(worldPoint);
+    const radius = TOKEN_RADIUS * camera.zoom;
+    const isSelected = token.id === selectedTokenId;
+
+    ctx.save();
+    ctx.fillStyle = token.color;
+    ctx.strokeStyle = isSelected ? "#ffffff" : "rgb(255 255 255 / 0.7)";
+    ctx.lineWidth = isSelected ? 4 : 2;
+    ctx.beginPath();
+    ctx.arc(screenPoint.x, screenPoint.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#0f172a";
+    ctx.font = `${Math.max(12, 14 * camera.zoom)}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(token.name, screenPoint.x, screenPoint.y);
+    ctx.restore();
+  }
+}
+
+function interpolateMovingToken(animation: MovingToken): Vector2 {
+  const elapsed = performance.now() - animation.startedAt;
+  const progress = Math.min(elapsed / animation.duration, 1);
+  const segmentProgress = progress * (animation.path.length - 1);
+  const segmentIndex = Math.min(Math.floor(segmentProgress), animation.path.length - 2);
+  const localProgress = easeInOutCubic(segmentProgress - segmentIndex);
+  const from = cellCenter(animation.path[segmentIndex]);
+  const to = cellCenter(animation.path[segmentIndex + 1]);
+
+  return {
+    x: from.x + (to.x - from.x) * localProgress,
+    y: from.y + (to.y - from.y) * localProgress,
+  };
+}
+
+function easeInOutCubic(value: number): number {
+  return value < 0.5 ? 4 * value * value * value : 1 - Math.pow(-2 * value + 2, 3) / 2;
 }
 
 function drawImageEntity(entity: SceneImage): void {
@@ -349,6 +722,12 @@ function render(): void {
     drawImageEntity(image);
   }
 
+  drawWalls();
+  if (previewPath.length > 0) {
+    drawPath(previewPath);
+  }
+  drawTokens();
+
   const selectedImage = getSelectedImage();
   if (selectedImage) {
     drawSelection(selectedImage);
@@ -381,9 +760,29 @@ function tick(now: number): void {
   const deltaSeconds = Math.min((now - lastFrameTime) / 1000, 0.05);
   lastFrameTime = now;
   updateCamera(deltaSeconds);
+  updateMovingTokenAnimation();
   render();
   updateSelectionPanel();
   requestAnimationFrame(tick);
+}
+
+function updateMovingTokenAnimation(): void {
+  if (!movingToken) {
+    return;
+  }
+
+  const progress = (performance.now() - movingToken.startedAt) / movingToken.duration;
+  if (progress < 1) {
+    return;
+  }
+
+  const token = sceneTokens.find((candidate) => candidate.id === movingToken?.tokenId);
+  const finalCell = movingToken.path[movingToken.path.length - 1];
+  if (token && finalCell) {
+    token.cell = finalCell;
+  }
+
+  movingToken = null;
 }
 
 function setCameraMoveMode(nextValue: boolean): void {
@@ -408,6 +807,12 @@ function hitTestImage(worldPoint: Vector2): SceneImage | null {
   return [...sceneImages]
     .sort((a, b) => b.z - a.z)
     .find((image) => pointInImage(image, worldPoint)) ?? null;
+}
+
+function hitTestToken(worldPoint: Vector2): SceneToken | null {
+  return [...sceneTokens]
+    .reverse()
+    .find((token) => distance(tokenRenderPosition(token), worldPoint) <= TOKEN_RADIUS + 8 / camera.zoom) ?? null;
 }
 
 function hitTestResizeHandle(screenPoint: Vector2): ResizeHandle | null {
@@ -441,12 +846,19 @@ function setCursor(screenPoint: Vector2): void {
   canvas.classList.remove("is-dragging");
 
   const resizeHandle = hitTestResizeHandle(screenPoint);
+  const worldPoint = screenToWorld(screenPoint);
 
   if (hitTestRotateHandle(screenPoint)) {
     canvas.style.cursor = "grab";
   } else if (resizeHandle) {
     canvas.style.cursor = getResizeCursor(resizeHandle);
-  } else if (hitTestImage(screenToWorld(screenPoint))) {
+  } else if (toolMode === "wall") {
+    canvas.style.cursor = "crosshair";
+  } else if (toolMode === "add-token") {
+    canvas.style.cursor = occupiedByToken(worldToCell(worldPoint)) ? "not-allowed" : "copy";
+  } else if (hitTestToken(worldPoint)) {
+    canvas.style.cursor = "grab";
+  } else if (hitTestImage(worldPoint)) {
     canvas.style.cursor = "move";
   } else {
     canvas.style.cursor = cameraMoveMode ? "grab" : "default";
@@ -627,7 +1039,44 @@ function updateSelectionPanel(): void {
 
 function selectImage(imageId: string | null): void {
   selectedImageId = imageId;
+  if (imageId) {
+    selectedTokenId = null;
+  }
   updateSelectionPanel();
+}
+
+function selectToken(tokenId: string | null): void {
+  selectedTokenId = tokenId;
+  if (tokenId) {
+    selectedImageId = null;
+  }
+  updateSelectionPanel();
+}
+
+function setToolMode(nextMode: ToolMode): void {
+  toolMode = toolMode === nextMode ? "select" : nextMode;
+  addTokenButton.classList.toggle("is-active", toolMode === "add-token");
+  addTokenButton.setAttribute("aria-pressed", String(toolMode === "add-token"));
+  wallModeButton.classList.toggle("is-active", toolMode === "wall");
+  wallModeButton.setAttribute("aria-pressed", String(toolMode === "wall"));
+  canvas.classList.toggle("is-wall-mode", toolMode === "wall");
+}
+
+function addTokenAtCell(cell: Cell): void {
+  if (occupiedByToken(cell)) {
+    return;
+  }
+
+  const tokenIndex = nextTokenIndex++;
+  const token: SceneToken = {
+    id: crypto.randomUUID(),
+    name: `P${tokenIndex}`,
+    cell,
+    color: TOKEN_COLORS[(tokenIndex - 1) % TOKEN_COLORS.length],
+  };
+
+  sceneTokens.push(token);
+  selectToken(token.id);
 }
 
 function addImageElement(imageElement: HTMLImageElement, name: string, worldPoint: Vector2): void {
@@ -721,6 +1170,20 @@ moveCameraButton.addEventListener("click", () => {
   setCameraMoveMode(!cameraMoveMode);
 });
 
+addTokenButton.addEventListener("click", () => {
+  setToolMode("add-token");
+});
+
+wallModeButton.addEventListener("click", () => {
+  setToolMode("wall");
+});
+
+clearWallsButton.addEventListener("click", () => {
+  blockedVerticalEdges.clear();
+  blockedHorizontalEdges.clear();
+  previewPath = [];
+});
+
 uploadInput.addEventListener("change", () => {
   if (uploadInput.files) {
     handleFiles(uploadInput.files);
@@ -753,6 +1216,18 @@ canvas.addEventListener("pointerdown", (event) => {
   pointer.x = screenPoint.x;
   pointer.y = screenPoint.y;
 
+  if (toolMode === "add-token") {
+    addTokenAtCell(worldToCell(worldPoint));
+    return;
+  }
+
+  if (toolMode === "wall") {
+    const edge = nearestEditableEdge(worldPoint);
+    toggleBlockedEdge(edge.type, edge.x, edge.y);
+    previewPath = [];
+    return;
+  }
+
   const selectedImage = getSelectedImage();
   const rotateHandleHit = hitTestRotateHandle(screenPoint);
   const resizeHandle = hitTestResizeHandle(screenPoint);
@@ -778,8 +1253,24 @@ canvas.addEventListener("pointerdown", (event) => {
       startRotation: selectedImage.rotation,
     };
   } else {
+    const tokenHit = hitTestToken(worldPoint);
     const imageHit = hitTestImage(worldPoint);
-    if (imageHit) {
+
+    if (tokenHit && movingToken?.tokenId !== tokenHit.id) {
+      const targetCell = worldToCell(worldPoint);
+      const path = findPath(tokenHit.cell, targetCell, tokenHit.id);
+      selectToken(tokenHit.id);
+      previewTokenPosition = cellCenter(tokenHit.cell);
+      previewPath = path;
+      interaction = {
+        type: "drag-token",
+        tokenId: tokenHit.id,
+        pointerId: event.pointerId,
+        startCell: tokenHit.cell,
+        targetCell,
+        path,
+      };
+    } else if (imageHit) {
       selectImage(imageHit.id);
       interaction = {
         type: "move-image",
@@ -789,7 +1280,9 @@ canvas.addEventListener("pointerdown", (event) => {
         startImage: { x: imageHit.x, y: imageHit.y },
       };
     } else if (cameraMoveMode) {
-      selectImage(null);
+      selectedImageId = null;
+      selectedTokenId = null;
+      updateSelectionPanel();
       interaction = {
         type: "pan-camera",
         pointerId: event.pointerId,
@@ -797,7 +1290,9 @@ canvas.addEventListener("pointerdown", (event) => {
         startCamera: { x: camera.x, y: camera.y },
       };
     } else {
-      selectImage(null);
+      selectedImageId = null;
+      selectedTokenId = null;
+      updateSelectionPanel();
     }
   }
 
@@ -836,6 +1331,18 @@ canvas.addEventListener("pointermove", (event) => {
     updateRotateInteraction(event, currentInteraction);
   }
 
+  if (currentInteraction.type === "drag-token") {
+    const targetCell = worldToCell(worldPoint);
+    previewTokenPosition = cellCenter(targetCell);
+
+    if (!sameCell(targetCell, currentInteraction.targetCell)) {
+      const path = findPath(currentInteraction.startCell, targetCell, currentInteraction.tokenId);
+      currentInteraction.targetCell = targetCell;
+      currentInteraction.path = path;
+      previewPath = path;
+    }
+  }
+
   if (currentInteraction.type === "pan-camera") {
     camera.x = currentInteraction.startCamera.x - (screenPoint.x - currentInteraction.startPointer.x) / camera.zoom;
     camera.y = currentInteraction.startCamera.y + (screenPoint.y - currentInteraction.startPointer.y) / camera.zoom;
@@ -845,7 +1352,24 @@ canvas.addEventListener("pointermove", (event) => {
 });
 
 canvas.addEventListener("pointerup", (event) => {
-  if (interaction?.pointerId === event.pointerId) {
+  const currentInteraction = interaction;
+
+  if (currentInteraction?.pointerId === event.pointerId) {
+    if (currentInteraction.type === "drag-token") {
+      const token = sceneTokens.find((candidate) => candidate.id === currentInteraction.tokenId);
+      if (token && currentInteraction.path.length > 1) {
+        movingToken = {
+          tokenId: token.id,
+          path: currentInteraction.path,
+          startedAt: performance.now(),
+          duration: Math.max(1, currentInteraction.path.length - 1) * TOKEN_STEP_ANIMATION_MS,
+        };
+      }
+
+      previewPath = [];
+      previewTokenPosition = null;
+    }
+
     interaction = null;
     canvas.releasePointerCapture(event.pointerId);
   }
@@ -855,6 +1379,11 @@ canvas.addEventListener("pointerup", (event) => {
 
 canvas.addEventListener("pointercancel", (event) => {
   if (interaction?.pointerId === event.pointerId) {
+    if (interaction.type === "drag-token") {
+      previewPath = [];
+      previewTokenPosition = null;
+    }
+
     interaction = null;
   }
 
