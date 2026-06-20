@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TRPG Infinite Canvas</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="world-canvas" aria-label="无限 2D 跑团画布"></canvas>
+
+      <header class="toolbar" aria-label="画布工具栏">
+        <button id="move-camera-button" type="button" class="tool-button" aria-pressed="false">
+          移动相机：关闭
+        </button>
+        <label class="tool-button upload-button">
+          上传图片
+          <input id="image-upload" type="file" accept="image/*" multiple />
+        </label>
+        <span class="hint">拖入图片到画布 · WASD 移动相机 · 拖拽图片移动 · 角点缩放 · 顶部手柄旋转</span>
+      </header>
+
+      <div id="drop-overlay" class="drop-overlay" hidden>松开以上传图片</div>
+
+      <div id="selection-panel" class="selection-panel" hidden>
+        <div class="selection-title" id="selection-title">图片</div>
+        <div class="selection-actions">
+          <button id="layer-up" type="button">上移层级</button>
+          <button id="layer-down" type="button">下移层级</button>
+          <button id="layer-top" type="button">置顶</button>
+          <button id="layer-bottom" type="button">置底</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

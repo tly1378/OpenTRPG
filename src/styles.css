@@ -1,0 +1,150 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #101319;
+  color: #f2f5f8;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+button {
+  font: inherit;
+}
+
+#world-canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  cursor: default;
+  touch-action: none;
+}
+
+#world-canvas.is-camera-mode {
+  cursor: grab;
+}
+
+#world-canvas.is-dragging {
+  cursor: grabbing;
+}
+
+.toolbar {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.tool-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 10px;
+  background: rgb(18 24 33 / 86%);
+  color: #f7fafc;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 28%);
+  cursor: pointer;
+  padding: 0 14px;
+  pointer-events: auto;
+  user-select: none;
+  backdrop-filter: blur(12px);
+}
+
+.tool-button:hover,
+.tool-button.is-active {
+  border-color: rgb(104 191 255 / 70%);
+  background: rgb(22 45 66 / 92%);
+}
+
+.upload-button input {
+  display: none;
+}
+
+.hint {
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 999px;
+  background: rgb(14 18 25 / 62%);
+  color: #b7c4d4;
+  font-size: 13px;
+  padding: 9px 13px;
+  pointer-events: none;
+  backdrop-filter: blur(12px);
+}
+
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  border: 3px dashed rgb(104 191 255 / 70%);
+  background: rgb(9 14 22 / 70%);
+  color: #e7f6ff;
+  font-size: clamp(24px, 4vw, 54px);
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.drop-overlay[hidden] {
+  display: none;
+}
+
+.selection-panel {
+  position: fixed;
+  z-index: 20;
+  min-width: 188px;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 14px;
+  background: rgb(15 20 29 / 90%);
+  box-shadow: 0 18px 45px rgb(0 0 0 / 35%);
+  padding: 10px;
+  pointer-events: auto;
+  backdrop-filter: blur(14px);
+}
+
+.selection-title {
+  max-width: 230px;
+  overflow: hidden;
+  color: #dbe7f3;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selection-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.selection-actions button {
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 8%);
+  color: #edf4fb;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 7px 8px;
+}
+
+.selection-actions button:hover {
+  border-color: rgb(104 191 255 / 70%);
+  background: rgb(104 191 255 / 18%);
+}
