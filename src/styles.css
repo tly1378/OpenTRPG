@@ -40,11 +40,10 @@ button {
   position: fixed;
   top: 16px;
   left: 16px;
-  right: 16px;
   z-index: 10;
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 10px;
   pointer-events: none;
 }
@@ -149,6 +148,13 @@ button {
   color: #cbd5e1;
 }
 
+#switch-identity-button {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 12;
+}
+
 .tool-button.is-hidden {
   display: none;
 }
@@ -186,6 +192,11 @@ button {
 }
 
 .identity-badge {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  z-index: 11;
+  transform: translateX(-50%);
   border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 999px;
   background: rgb(14 18 25 / 62%);
@@ -201,11 +212,16 @@ button {
 }
 
 .hint {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  width: clamp(280px, 30vw, 460px);
   border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 999px;
+  border-radius: 14px;
   background: rgb(14 18 25 / 62%);
   color: #b7c4d4;
   font-size: 13px;
+  line-height: 1.55;
   padding: 9px 13px;
   pointer-events: none;
   backdrop-filter: blur(12px);
