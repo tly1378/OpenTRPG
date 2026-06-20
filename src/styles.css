@@ -213,7 +213,7 @@ button {
 
 .hint {
   position: fixed;
-  left: 16px;
+  right: 16px;
   bottom: 16px;
   width: clamp(280px, 30vw, 460px);
   border: 1px solid rgb(255 255 255 / 10%);
@@ -225,6 +225,83 @@ button {
   padding: 9px 13px;
   pointer-events: none;
   backdrop-filter: blur(12px);
+}
+
+.latency-panel {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 14;
+  width: min(300px, calc(100vw - 32px));
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 14px;
+  background: rgb(14 18 25 / 76%);
+  box-shadow: 0 16px 44px rgb(0 0 0 / 30%);
+  color: #dbe7f3;
+  font-size: 12px;
+  padding: 12px;
+  pointer-events: none;
+  backdrop-filter: blur(12px);
+}
+
+.latency-panel[hidden] {
+  display: none;
+}
+
+.latency-panel-title {
+  color: #f7fafc;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.latency-panel-status {
+  color: #93a4b8;
+  margin-bottom: 10px;
+}
+
+.latency-panel-status.is-online {
+  color: #7dd3fc;
+}
+
+.latency-panel-status.is-connecting {
+  color: #facc15;
+}
+
+.latency-client-list {
+  display: grid;
+  gap: 6px;
+}
+
+.latency-client-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid rgb(255 255 255 / 8%);
+  padding-top: 6px;
+}
+
+.latency-client-row span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.latency-client-row span:last-child {
+  color: #a7f3d0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.latency-client-empty,
+.latency-panel-error {
+  color: #93a4b8;
+  line-height: 1.45;
+}
+
+.latency-panel-error {
+  color: #fca5a5;
 }
 
 .drop-overlay {

@@ -1,4 +1,5 @@
 import "./styles.css";
+import { NetworkClient, type NetworkSnapshot } from "./networkClient";
 
 type Vector2 = {
   x: number;
@@ -140,6 +141,10 @@ function mustGetCanvasContext(targetCanvas: HTMLCanvasElement): CanvasRenderingC
 }
 
 const ctx = mustGetCanvasContext(canvas);
+const latencyPanel = document.createElement("aside");
+latencyPanel.className = "latency-panel";
+latencyPanel.hidden = true;
+document.body.append(latencyPanel);
 
 const camera = {
   x: 0,
@@ -169,6 +174,72 @@ let dragDepth = 0;
 let movingToken: MovingToken | null = null;
 let previewTokenPosition: Vector2 | null = null;
 let previewPath: Cell[] = [];
+let latestNetworkSnapshot: NetworkSnapshot = {
+  status: "offline",
+  clients: [],
+  error: null,
+};
+
+const networkClient = new NetworkClient((snapshot) => {
+  latestNetworkSnapshot = snapshot;
+  renderLatencyPanel();
+});
+
+function formatLatency(latencyMs: number | null): string {
+  return latencyMs === null ? "等待中" : `${latencyMs} ms`;
+}
+
+function renderLatencyPanel(): void {
+  if (!isLoggedIn()) {
+    latencyPanel.hidden = true;
+    latencyPanel.replaceChildren();
+    return;
+  }
+
+  const title = document.createElement("div");
+  const status = document.createElement("div");
+  const list = document.createElement("div");
+
+  title.className = "latency-panel-title";
+  status.className = `latency-panel-status is-${latestNetworkSnapshot.status}`;
+  list.className = "latency-client-list";
+  title.textContent = "服务器延迟";
+  status.textContent =
+    latestNetworkSnapshot.status === "online"
+      ? "已连接"
+      : latestNetworkSnapshot.status === "connecting"
+        ? "连接中..."
+        : "未连接";
+
+  if (latestNetworkSnapshot.error) {
+    const error = document.createElement("div");
+    error.className = "latency-panel-error";
+    error.textContent = latestNetworkSnapshot.error;
+    list.append(error);
+  }
+
+  if (latestNetworkSnapshot.clients.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "latency-client-empty";
+    empty.textContent = latestNetworkSnapshot.status === "online" ? "等待延迟数据..." : "等待服务器响应...";
+    list.append(empty);
+  } else {
+    for (const client of latestNetworkSnapshot.clients) {
+      const row = document.createElement("div");
+      const name = document.createElement("span");
+      const latency = document.createElement("span");
+
+      row.className = "latency-client-row";
+      name.textContent = `${client.identity.name} · ${client.identity.type === "admin" ? "管理员" : "玩家"}`;
+      latency.textContent = formatLatency(client.latencyMs);
+      row.append(name, latency);
+      list.append(row);
+    }
+  }
+
+  latencyPanel.replaceChildren(title, status, list);
+  latencyPanel.hidden = false;
+}
 
 const HANDLE_RADIUS = 8;
 const ROTATE_HANDLE_DISTANCE = 44;
@@ -348,10 +419,13 @@ function enterIdentity(identity: Identity): void {
   identityBadge.textContent = `${identity.name} · ${identity.type === "admin" ? "管理员" : "玩家"}`;
   rebuildModeOptions();
   setAppMode(identity.type === "admin" ? "art" : "play");
+  networkClient.connect(identity);
+  renderLatencyPanel();
 }
 
 function showIdentityScreen(): void {
   currentIdentity = null;
+  networkClient.disconnect();
   selectedImageId = null;
   selectedTokenId = null;
   interaction = null;
