@@ -16,7 +16,8 @@ type ClientPointEvent = {
 };
 
 type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
-type ToolMode = "select" | "add-token" | "wall";
+type AppMode = "art" | "logic" | "play";
+type LogicTool = "add-token" | "wall";
 type WallEdgeType = "vertical" | "horizontal";
 
 type SceneImage = {
@@ -98,7 +99,8 @@ function mustQuery<T extends Element>(selector: string): T {
 }
 
 const canvas = mustQuery<HTMLCanvasElement>("#world-canvas");
-const moveCameraButton = mustQuery<HTMLButtonElement>("#move-camera-button");
+const modeSelect = mustQuery<HTMLSelectElement>("#mode-select");
+const uploadButton = mustQuery<HTMLLabelElement>("#upload-button");
 const uploadInput = mustQuery<HTMLInputElement>("#image-upload");
 const addTokenButton = mustQuery<HTMLButtonElement>("#add-token-button");
 const wallModeButton = mustQuery<HTMLButtonElement>("#wall-mode-button");
@@ -135,7 +137,6 @@ const pointer = {
   y: 0,
 };
 
-const keys = new Set<string>();
 const sceneImages: SceneImage[] = [];
 const sceneTokens: SceneToken[] = [];
 const blockedVerticalEdges = new Set<string>();
@@ -144,9 +145,8 @@ const blockedHorizontalEdges = new Set<string>();
 let selectedImageId: string | null = null;
 let selectedTokenId: string | null = null;
 let interaction: Interaction | null = null;
-let cameraMoveMode = false;
-let toolMode: ToolMode = "select";
-let lastFrameTime = performance.now();
+let appMode: AppMode = "art";
+let logicTool: LogicTool = "wall";
 let nextZ = 1;
 let nextTokenIndex = 1;
 let dragDepth = 0;
@@ -157,7 +157,6 @@ let previewPath: Cell[] = [];
 const HANDLE_RADIUS = 8;
 const ROTATE_HANDLE_DISTANCE = 44;
 const MIN_IMAGE_SIZE = 24;
-const CAMERA_SPEED = 680;
 const GRID_CELL_SIZE = 80;
 const TOKEN_RADIUS = 24;
 const TOKEN_COLORS = ["#f97316", "#22c55e", "#60a5fa", "#e879f9", "#facc15", "#fb7185"];
@@ -734,32 +733,7 @@ function render(): void {
   }
 }
 
-function updateCamera(deltaSeconds: number): void {
-  if (!cameraMoveMode) {
-    return;
-  }
-
-  const direction = { x: 0, y: 0 };
-
-  if (keys.has("w")) direction.y += 1;
-  if (keys.has("s")) direction.y -= 1;
-  if (keys.has("a")) direction.x -= 1;
-  if (keys.has("d")) direction.x += 1;
-
-  const length = Math.hypot(direction.x, direction.y);
-  if (length === 0) {
-    return;
-  }
-
-  const distancePerFrame = (CAMERA_SPEED / camera.zoom) * deltaSeconds;
-  camera.x += (direction.x / length) * distancePerFrame;
-  camera.y += (direction.y / length) * distancePerFrame;
-}
-
-function tick(now: number): void {
-  const deltaSeconds = Math.min((now - lastFrameTime) / 1000, 0.05);
-  lastFrameTime = now;
-  updateCamera(deltaSeconds);
+function tick(): void {
   updateMovingTokenAnimation();
   render();
   updateSelectionPanel();
@@ -783,18 +757,6 @@ function updateMovingTokenAnimation(): void {
   }
 
   movingToken = null;
-}
-
-function setCameraMoveMode(nextValue: boolean): void {
-  cameraMoveMode = nextValue;
-  moveCameraButton.textContent = `移动相机：${cameraMoveMode ? "开启" : "关闭"}`;
-  moveCameraButton.classList.toggle("is-active", cameraMoveMode);
-  moveCameraButton.setAttribute("aria-pressed", String(cameraMoveMode));
-  canvas.classList.toggle("is-camera-mode", cameraMoveMode);
-}
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
 }
 
 function pointInImage(entity: SceneImage, worldPoint: Vector2): boolean {
@@ -848,20 +810,20 @@ function setCursor(screenPoint: Vector2): void {
   const resizeHandle = hitTestResizeHandle(screenPoint);
   const worldPoint = screenToWorld(screenPoint);
 
-  if (hitTestRotateHandle(screenPoint)) {
+  if (appMode === "art" && hitTestRotateHandle(screenPoint)) {
     canvas.style.cursor = "grab";
-  } else if (resizeHandle) {
+  } else if (appMode === "art" && resizeHandle) {
     canvas.style.cursor = getResizeCursor(resizeHandle);
-  } else if (toolMode === "wall") {
+  } else if (appMode === "logic" && logicTool === "wall") {
     canvas.style.cursor = "crosshair";
-  } else if (toolMode === "add-token") {
+  } else if (appMode === "logic" && logicTool === "add-token") {
     canvas.style.cursor = occupiedByToken(worldToCell(worldPoint)) ? "not-allowed" : "copy";
-  } else if (hitTestToken(worldPoint)) {
+  } else if (appMode === "play" && hitTestToken(worldPoint)) {
     canvas.style.cursor = "grab";
-  } else if (hitTestImage(worldPoint)) {
+  } else if (appMode === "art" && hitTestImage(worldPoint)) {
     canvas.style.cursor = "move";
   } else {
-    canvas.style.cursor = cameraMoveMode ? "grab" : "default";
+    canvas.style.cursor = "default";
   }
 }
 
@@ -1053,13 +1015,54 @@ function selectToken(tokenId: string | null): void {
   updateSelectionPanel();
 }
 
-function setToolMode(nextMode: ToolMode): void {
-  toolMode = toolMode === nextMode ? "select" : nextMode;
-  addTokenButton.classList.toggle("is-active", toolMode === "add-token");
-  addTokenButton.setAttribute("aria-pressed", String(toolMode === "add-token"));
-  wallModeButton.classList.toggle("is-active", toolMode === "wall");
-  wallModeButton.setAttribute("aria-pressed", String(toolMode === "wall"));
-  canvas.classList.toggle("is-wall-mode", toolMode === "wall");
+function setAppMode(nextMode: AppMode): void {
+  appMode = nextMode;
+  interaction = null;
+  previewPath = [];
+  previewTokenPosition = null;
+
+  if (appMode !== "art") {
+    selectedImageId = null;
+  }
+
+  if (appMode !== "play") {
+    selectedTokenId = null;
+  }
+
+  updateModeControls();
+  updateSelectionPanel();
+}
+
+function setLogicTool(nextTool: LogicTool): void {
+  logicTool = nextTool;
+  updateModeControls();
+}
+
+function updateModeControls(): void {
+  modeSelect.value = appMode;
+
+  uploadInput.disabled = appMode !== "art";
+  uploadButton.classList.toggle("is-disabled", appMode !== "art");
+  uploadButton.classList.toggle("is-hidden", appMode !== "art");
+  addTokenButton.disabled = appMode !== "logic";
+  addTokenButton.classList.toggle("is-hidden", appMode !== "logic");
+  wallModeButton.disabled = appMode !== "logic";
+  wallModeButton.classList.toggle("is-hidden", appMode !== "logic");
+  clearWallsButton.disabled = appMode !== "logic";
+  clearWallsButton.classList.toggle("is-hidden", appMode !== "logic");
+  resetSizeButton.disabled = appMode !== "art";
+  layerUpButton.disabled = appMode !== "art";
+  layerDownButton.disabled = appMode !== "art";
+  layerTopButton.disabled = appMode !== "art";
+  layerBottomButton.disabled = appMode !== "art";
+
+  addTokenButton.classList.toggle("is-active", appMode === "logic" && logicTool === "add-token");
+  wallModeButton.classList.toggle("is-active", appMode === "logic" && logicTool === "wall");
+  addTokenButton.setAttribute("aria-pressed", String(appMode === "logic" && logicTool === "add-token"));
+  wallModeButton.setAttribute("aria-pressed", String(appMode === "logic" && logicTool === "wall"));
+  canvas.classList.toggle("is-wall-mode", appMode === "logic" && logicTool === "wall");
+  canvas.classList.toggle("is-art-mode", appMode === "art");
+  canvas.classList.toggle("is-play-mode", appMode === "play");
 }
 
 function addTokenAtCell(cell: Cell): void {
@@ -1166,48 +1169,38 @@ function resetSelectedImageSize(): void {
   selectedImage.height = selectedImage.originalHeight;
 }
 
-moveCameraButton.addEventListener("click", () => {
-  setCameraMoveMode(!cameraMoveMode);
+modeSelect.addEventListener("change", () => {
+  setAppMode(modeSelect.value as AppMode);
 });
 
 addTokenButton.addEventListener("click", () => {
-  setToolMode("add-token");
+  if (appMode === "logic") {
+    setLogicTool("add-token");
+  }
 });
 
 wallModeButton.addEventListener("click", () => {
-  setToolMode("wall");
+  if (appMode === "logic") {
+    setLogicTool("wall");
+  }
 });
 
 clearWallsButton.addEventListener("click", () => {
+  if (appMode !== "logic") {
+    return;
+  }
+
   blockedVerticalEdges.clear();
   blockedHorizontalEdges.clear();
   previewPath = [];
 });
 
 uploadInput.addEventListener("change", () => {
-  if (uploadInput.files) {
+  if (appMode === "art" && uploadInput.files) {
     handleFiles(uploadInput.files);
   }
 
   uploadInput.value = "";
-});
-
-window.addEventListener("keydown", (event) => {
-  if (isEditableTarget(event.target)) {
-    return;
-  }
-
-  const key = event.key.toLowerCase();
-  if (["w", "a", "s", "d"].includes(key)) {
-    keys.add(key);
-    if (cameraMoveMode) {
-      event.preventDefault();
-    }
-  }
-});
-
-window.addEventListener("keyup", (event) => {
-  keys.delete(event.key.toLowerCase());
 });
 
 canvas.addEventListener("pointerdown", (event) => {
@@ -1216,15 +1209,19 @@ canvas.addEventListener("pointerdown", (event) => {
   pointer.x = screenPoint.x;
   pointer.y = screenPoint.y;
 
-  if (toolMode === "add-token") {
-    addTokenAtCell(worldToCell(worldPoint));
-    return;
-  }
-
-  if (toolMode === "wall") {
-    const edge = nearestEditableEdge(worldPoint);
-    toggleBlockedEdge(edge.type, edge.x, edge.y);
-    previewPath = [];
+  if (event.button === 2) {
+    event.preventDefault();
+    selectedImageId = null;
+    selectedTokenId = null;
+    updateSelectionPanel();
+    interaction = {
+      type: "pan-camera",
+      pointerId: event.pointerId,
+      startPointer: screenPoint,
+      startCamera: { x: camera.x, y: camera.y },
+    };
+    canvas.setPointerCapture(event.pointerId);
+    setCursor(screenPoint);
     return;
   }
 
@@ -1232,7 +1229,23 @@ canvas.addEventListener("pointerdown", (event) => {
   const rotateHandleHit = hitTestRotateHandle(screenPoint);
   const resizeHandle = hitTestResizeHandle(screenPoint);
 
-  if (selectedImage && rotateHandleHit) {
+  if (appMode === "logic") {
+    selectedImageId = null;
+    selectedTokenId = null;
+    updateSelectionPanel();
+
+    if (logicTool === "add-token") {
+      addTokenAtCell(worldToCell(worldPoint));
+      return;
+    }
+
+    const edge = nearestEditableEdge(worldPoint);
+    toggleBlockedEdge(edge.type, edge.x, edge.y);
+    previewPath = [];
+    return;
+  }
+
+  if (appMode === "art" && selectedImage && rotateHandleHit) {
     const angle = Math.atan2(worldPoint.y - selectedImage.y, worldPoint.x - selectedImage.x);
     interaction = {
       type: "rotate-image",
@@ -1241,7 +1254,7 @@ canvas.addEventListener("pointerdown", (event) => {
       startAngle: angle,
       startRotation: selectedImage.rotation,
     };
-  } else if (selectedImage && resizeHandle) {
+  } else if (appMode === "art" && selectedImage && resizeHandle) {
     interaction = {
       type: "resize-image",
       imageId: selectedImage.id,
@@ -1253,8 +1266,8 @@ canvas.addEventListener("pointerdown", (event) => {
       startRotation: selectedImage.rotation,
     };
   } else {
-    const tokenHit = hitTestToken(worldPoint);
-    const imageHit = hitTestImage(worldPoint);
+    const tokenHit = appMode === "play" ? hitTestToken(worldPoint) : null;
+    const imageHit = appMode === "art" ? hitTestImage(worldPoint) : null;
 
     if (tokenHit && movingToken?.tokenId !== tokenHit.id) {
       const targetCell = worldToCell(worldPoint);
@@ -1278,16 +1291,6 @@ canvas.addEventListener("pointerdown", (event) => {
         pointerId: event.pointerId,
         startPointer: worldPoint,
         startImage: { x: imageHit.x, y: imageHit.y },
-      };
-    } else if (cameraMoveMode) {
-      selectedImageId = null;
-      selectedTokenId = null;
-      updateSelectionPanel();
-      interaction = {
-        type: "pan-camera",
-        pointerId: event.pointerId,
-        startPointer: screenPoint,
-        startCamera: { x: camera.x, y: camera.y },
       };
     } else {
       selectedImageId = null;
@@ -1390,6 +1393,10 @@ canvas.addEventListener("pointercancel", (event) => {
   setCursor(screenPointFromEvent(event));
 });
 
+canvas.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
+});
+
 canvas.addEventListener(
   "wheel",
   (event) => {
@@ -1405,7 +1412,7 @@ canvas.addEventListener(
 );
 
 window.addEventListener("dragenter", (event) => {
-  if (!hasDraggedImage(event)) {
+  if (appMode !== "art" || !hasDraggedImage(event)) {
     return;
   }
 
@@ -1415,6 +1422,11 @@ window.addEventListener("dragenter", (event) => {
 });
 
 window.addEventListener("dragover", (event) => {
+  if (appMode !== "art" && hasDraggedImage(event)) {
+    event.preventDefault();
+    return;
+  }
+
   if (!hasDraggedImage(event)) {
     return;
   }
@@ -1423,7 +1435,7 @@ window.addEventListener("dragover", (event) => {
 });
 
 window.addEventListener("dragleave", (event) => {
-  if (!hasDraggedImage(event)) {
+  if (appMode !== "art" || !hasDraggedImage(event)) {
     return;
   }
 
@@ -1433,6 +1445,16 @@ window.addEventListener("dragleave", (event) => {
 });
 
 window.addEventListener("drop", (event) => {
+  if (appMode !== "art") {
+    if (hasDraggedImage(event)) {
+      event.preventDefault();
+    }
+
+    dragDepth = 0;
+    dropOverlay.hidden = true;
+    return;
+  }
+
   event.preventDefault();
   dragDepth = 0;
   dropOverlay.hidden = true;
@@ -1450,6 +1472,6 @@ resetSizeButton.addEventListener("click", resetSelectedImageSize);
 
 window.addEventListener("resize", resizeCanvas);
 
-setCameraMoveMode(false);
+updateModeControls();
 resizeCanvas();
 requestAnimationFrame(tick);
