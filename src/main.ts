@@ -10,7 +10,7 @@ type ClientPointEvent = {
   clientY: number;
 };
 
-type ResizeHandle = "nw" | "ne" | "sw" | "se";
+type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 
 type SceneImage = {
   id: string;
@@ -20,6 +20,8 @@ type SceneImage = {
   y: number;
   width: number;
   height: number;
+  originalWidth: number;
+  originalHeight: number;
   rotation: number;
   z: number;
 };
@@ -72,6 +74,7 @@ const uploadInput = mustQuery<HTMLInputElement>("#image-upload");
 const dropOverlay = mustQuery<HTMLDivElement>("#drop-overlay");
 const selectionPanel = mustQuery<HTMLDivElement>("#selection-panel");
 const selectionTitle = mustQuery<HTMLDivElement>("#selection-title");
+const resetSizeButton = mustQuery<HTMLButtonElement>("#reset-size");
 const layerUpButton = mustQuery<HTMLButtonElement>("#layer-up");
 const layerDownButton = mustQuery<HTMLButtonElement>("#layer-down");
 const layerTopButton = mustQuery<HTMLButtonElement>("#layer-top");
@@ -250,15 +253,30 @@ function drawImageEntity(entity: SceneImage): void {
   ctx.restore();
 }
 
-function getImageCorners(entity: SceneImage): Record<ResizeHandle, Vector2> {
+function getImageCorners(entity: SceneImage): Record<"nw" | "ne" | "sw" | "se", Vector2> {
+  const handles = getResizeHandlePositions(entity);
+
+  return {
+    nw: handles.nw,
+    ne: handles.ne,
+    sw: handles.sw,
+    se: handles.se,
+  };
+}
+
+function getResizeHandlePositions(entity: SceneImage): Record<ResizeHandle, Vector2> {
   const halfWidth = entity.width / 2;
   const halfHeight = entity.height / 2;
 
   return {
     nw: add({ x: entity.x, y: entity.y }, rotate({ x: -halfWidth, y: halfHeight }, entity.rotation)),
+    n: add({ x: entity.x, y: entity.y }, rotate({ x: 0, y: halfHeight }, entity.rotation)),
     ne: add({ x: entity.x, y: entity.y }, rotate({ x: halfWidth, y: halfHeight }, entity.rotation)),
-    sw: add({ x: entity.x, y: entity.y }, rotate({ x: -halfWidth, y: -halfHeight }, entity.rotation)),
+    e: add({ x: entity.x, y: entity.y }, rotate({ x: halfWidth, y: 0 }, entity.rotation)),
     se: add({ x: entity.x, y: entity.y }, rotate({ x: halfWidth, y: -halfHeight }, entity.rotation)),
+    s: add({ x: entity.x, y: entity.y }, rotate({ x: 0, y: -halfHeight }, entity.rotation)),
+    sw: add({ x: entity.x, y: entity.y }, rotate({ x: -halfWidth, y: -halfHeight }, entity.rotation)),
+    w: add({ x: entity.x, y: entity.y }, rotate({ x: -halfWidth, y: 0 }, entity.rotation)),
   };
 }
 
@@ -271,8 +289,11 @@ function getRotateHandlePosition(entity: SceneImage): Vector2 {
 
 function drawSelection(entity: SceneImage): void {
   const corners = getImageCorners(entity);
-  const cornerOrder: ResizeHandle[] = ["nw", "ne", "se", "sw"];
+  const handles = getResizeHandlePositions(entity);
+  const cornerOrder: Array<"nw" | "ne" | "se" | "sw"> = ["nw", "ne", "se", "sw"];
+  const handleOrder: ResizeHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
   const screenCorners = cornerOrder.map((key) => worldToScreen(corners[key]));
+  const screenHandles = handleOrder.map((key) => worldToScreen(handles[key]));
   const rotateHandle = worldToScreen(getRotateHandlePosition(entity));
   const topMiddle = {
     x: (screenCorners[0].x + screenCorners[1].x) / 2,
@@ -301,9 +322,9 @@ function drawSelection(entity: SceneImage): void {
 
   ctx.fillStyle = "#101319";
   ctx.strokeStyle = "#68bfff";
-  for (const corner of screenCorners) {
+  for (const handle of screenHandles) {
     ctx.beginPath();
-    ctx.rect(corner.x - HANDLE_RADIUS, corner.y - HANDLE_RADIUS, HANDLE_RADIUS * 2, HANDLE_RADIUS * 2);
+    ctx.rect(handle.x - HANDLE_RADIUS, handle.y - HANDLE_RADIUS, HANDLE_RADIUS * 2, HANDLE_RADIUS * 2);
     ctx.fill();
     ctx.stroke();
   }
@@ -395,11 +416,11 @@ function hitTestResizeHandle(screenPoint: Vector2): ResizeHandle | null {
     return null;
   }
 
-  const corners = getImageCorners(selectedImage);
-  const handles: ResizeHandle[] = ["nw", "ne", "sw", "se"];
+  const handles = getResizeHandlePositions(selectedImage);
+  const handleOrder: ResizeHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
   return (
-    handles.find((handle) => distance(worldToScreen(corners[handle]), screenPoint) <= HANDLE_RADIUS + 5) ?? null
+    handleOrder.find((handle) => distance(worldToScreen(handles[handle]), screenPoint) <= HANDLE_RADIUS + 5) ?? null
   );
 }
 
@@ -419,15 +440,33 @@ function setCursor(screenPoint: Vector2): void {
 
   canvas.classList.remove("is-dragging");
 
+  const resizeHandle = hitTestResizeHandle(screenPoint);
+
   if (hitTestRotateHandle(screenPoint)) {
     canvas.style.cursor = "grab";
-  } else if (hitTestResizeHandle(screenPoint)) {
-    canvas.style.cursor = "nwse-resize";
+  } else if (resizeHandle) {
+    canvas.style.cursor = getResizeCursor(resizeHandle);
   } else if (hitTestImage(screenToWorld(screenPoint))) {
     canvas.style.cursor = "move";
   } else {
     canvas.style.cursor = cameraMoveMode ? "grab" : "default";
   }
+}
+
+function getResizeCursor(handle: ResizeHandle): string {
+  if (handle === "n" || handle === "s") {
+    return "ns-resize";
+  }
+
+  if (handle === "e" || handle === "w") {
+    return "ew-resize";
+  }
+
+  if (handle === "ne" || handle === "sw") {
+    return "nesw-resize";
+  }
+
+  return "nwse-resize";
 }
 
 function screenPointFromEvent(event: ClientPointEvent): Vector2 {
@@ -440,16 +479,106 @@ function screenPointFromEvent(event: ClientPointEvent): Vector2 {
 }
 
 function getHandleSigns(handle: ResizeHandle): Vector2 {
-  switch (handle) {
-    case "nw":
-      return { x: -1, y: 1 };
-    case "ne":
-      return { x: 1, y: 1 };
-    case "sw":
-      return { x: -1, y: -1 };
-    case "se":
-      return { x: 1, y: -1 };
+  return {
+    x: handle.includes("w") ? -1 : handle.includes("e") ? 1 : 0,
+    y: handle.includes("s") ? -1 : handle.includes("n") ? 1 : 0,
+  };
+}
+
+function resizeWithoutAspectLock(
+  currentLocal: Vector2,
+  state: Extract<Interaction, { type: "resize-image" }>,
+): { centerLocal: Vector2; width: number; height: number } {
+  const signs = getHandleSigns(state.handle);
+  let left = -state.startWidth / 2;
+  let right = state.startWidth / 2;
+  let bottom = -state.startHeight / 2;
+  let top = state.startHeight / 2;
+
+  if (signs.x < 0) left = Math.min(currentLocal.x, right - MIN_IMAGE_SIZE);
+  if (signs.x > 0) right = Math.max(currentLocal.x, left + MIN_IMAGE_SIZE);
+  if (signs.y < 0) bottom = Math.min(currentLocal.y, top - MIN_IMAGE_SIZE);
+  if (signs.y > 0) top = Math.max(currentLocal.y, bottom + MIN_IMAGE_SIZE);
+
+  return {
+    centerLocal: {
+      x: (left + right) / 2,
+      y: (bottom + top) / 2,
+    },
+    width: right - left,
+    height: top - bottom,
+  };
+}
+
+function resizeWithAspectLock(
+  currentLocal: Vector2,
+  state: Extract<Interaction, { type: "resize-image" }>,
+): { centerLocal: Vector2; width: number; height: number } {
+  const signs = getHandleSigns(state.handle);
+  const aspectRatio = state.startWidth / state.startHeight;
+
+  if (signs.x !== 0 && signs.y !== 0) {
+    const anchorLocal = {
+      x: -signs.x * state.startWidth * 0.5,
+      y: -signs.y * state.startHeight * 0.5,
+    };
+    const widthCandidate = Math.max((currentLocal.x - anchorLocal.x) * signs.x, MIN_IMAGE_SIZE);
+    const heightCandidate = Math.max((currentLocal.y - anchorLocal.y) * signs.y, MIN_IMAGE_SIZE);
+    const scale = Math.max(widthCandidate / state.startWidth, heightCandidate / state.startHeight);
+    const width = Math.max(state.startWidth * scale, MIN_IMAGE_SIZE);
+    const height = Math.max(state.startHeight * scale, MIN_IMAGE_SIZE);
+    const draggedLocal = {
+      x: anchorLocal.x + signs.x * width,
+      y: anchorLocal.y + signs.y * height,
+    };
+
+    return {
+      centerLocal: {
+        x: (anchorLocal.x + draggedLocal.x) / 2,
+        y: (anchorLocal.y + draggedLocal.y) / 2,
+      },
+      width,
+      height,
+    };
   }
+
+  if (signs.x !== 0) {
+    const anchorX = -signs.x * state.startWidth * 0.5;
+    let width = Math.max((currentLocal.x - anchorX) * signs.x, MIN_IMAGE_SIZE);
+    let height = width / aspectRatio;
+
+    if (height < MIN_IMAGE_SIZE) {
+      height = MIN_IMAGE_SIZE;
+      width = height * aspectRatio;
+    }
+
+    return {
+      centerLocal: {
+        x: anchorX + signs.x * width * 0.5,
+        y: 0,
+      },
+      width,
+      height,
+    };
+  }
+
+  const anchorY = -signs.y * state.startHeight * 0.5;
+  let height = Math.max((currentLocal.y - anchorY) * signs.y, MIN_IMAGE_SIZE);
+  let width = height * aspectRatio;
+
+  if (width < MIN_IMAGE_SIZE) {
+    width = MIN_IMAGE_SIZE;
+    height = width / aspectRatio;
+  }
+
+  return {
+    centerLocal: {
+      x: 0,
+      y: anchorY + signs.y * height * 0.5,
+    },
+    width,
+    height,
+  };
 }
 
 function updateResizeInteraction(event: PointerEvent, state: Extract<Interaction, { type: "resize-image" }>): void {
@@ -458,29 +587,17 @@ function updateResizeInteraction(event: PointerEvent, state: Extract<Interaction
     return;
   }
 
-  const signs = getHandleSigns(state.handle);
   const currentWorld = screenToWorld(screenPointFromEvent(event));
   const currentLocal = rotate(subtract(currentWorld, state.startCenter), -state.startRotation);
-  const anchorLocal = {
-    x: -signs.x * state.startWidth * 0.5,
-    y: -signs.y * state.startHeight * 0.5,
-  };
-  const width = Math.max((currentLocal.x - anchorLocal.x) * signs.x, MIN_IMAGE_SIZE);
-  const height = Math.max((currentLocal.y - anchorLocal.y) * signs.y, MIN_IMAGE_SIZE);
-  const draggedLocal = {
-    x: anchorLocal.x + signs.x * width,
-    y: anchorLocal.y + signs.y * height,
-  };
-  const nextCenterLocal = {
-    x: (anchorLocal.x + draggedLocal.x) * 0.5,
-    y: (anchorLocal.y + draggedLocal.y) * 0.5,
-  };
-  const nextCenter = add(state.startCenter, rotate(nextCenterLocal, state.startRotation));
+  const nextSize = event.shiftKey
+    ? resizeWithAspectLock(currentLocal, state)
+    : resizeWithoutAspectLock(currentLocal, state);
+  const nextCenter = add(state.startCenter, rotate(nextSize.centerLocal, state.startRotation));
 
   entity.x = nextCenter.x;
   entity.y = nextCenter.y;
-  entity.width = width;
-  entity.height = height;
+  entity.width = nextSize.width;
+  entity.height = nextSize.height;
 }
 
 function updateRotateInteraction(event: PointerEvent, state: Extract<Interaction, { type: "rotate-image" }>): void {
@@ -498,22 +615,14 @@ function updateSelectionPanel(): void {
   const selectedImage = getSelectedImage();
 
   if (!selectedImage) {
-    selectionPanel.hidden = true;
+    selectionPanel.classList.remove("is-open");
+    selectionPanel.setAttribute("aria-hidden", "true");
     return;
   }
 
-  const corners = Object.values(getImageCorners(selectedImage)).map(worldToScreen);
-  const maxX = Math.max(...corners.map((corner) => corner.x));
-  const minY = Math.min(...corners.map((corner) => corner.y));
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  const left = Math.min(maxX + 14, viewportWidth - selectionPanel.offsetWidth - 12);
-  const top = Math.max(12, Math.min(minY, viewportHeight - selectionPanel.offsetHeight - 12));
-
   selectionTitle.textContent = selectedImage.name;
-  selectionPanel.hidden = false;
-  selectionPanel.style.left = `${left}px`;
-  selectionPanel.style.top = `${top}px`;
+  selectionPanel.classList.add("is-open");
+  selectionPanel.setAttribute("aria-hidden", "false");
 }
 
 function selectImage(imageId: string | null): void {
@@ -535,6 +644,8 @@ function addImageElement(imageElement: HTMLImageElement, name: string, worldPoin
     y: worldPoint.y,
     width,
     height,
+    originalWidth: imageElement.naturalWidth,
+    originalHeight: imageElement.naturalHeight,
     rotation: 0,
     z: nextZ++,
   };
@@ -594,6 +705,16 @@ function moveLayer(direction: "up" | "down" | "top" | "bottom"): void {
   if (direction === "bottom") selectedImage.z = -1;
 
   normalizeZIndexes();
+}
+
+function resetSelectedImageSize(): void {
+  const selectedImage = getSelectedImage();
+  if (!selectedImage) {
+    return;
+  }
+
+  selectedImage.width = selectedImage.originalWidth;
+  selectedImage.height = selectedImage.originalHeight;
 }
 
 moveCameraButton.addEventListener("click", () => {
@@ -796,6 +917,7 @@ layerUpButton.addEventListener("click", () => moveLayer("up"));
 layerDownButton.addEventListener("click", () => moveLayer("down"));
 layerTopButton.addEventListener("click", () => moveLayer("top"));
 layerBottomButton.addEventListener("click", () => moveLayer("bottom"));
+resetSizeButton.addEventListener("click", resetSelectedImageSize);
 
 window.addEventListener("resize", resizeCanvas);
 

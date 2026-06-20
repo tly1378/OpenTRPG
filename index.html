@@ -17,20 +17,22 @@
           上传图片
           <input id="image-upload" type="file" accept="image/*" multiple />
         </label>
-        <span class="hint">拖入图片到画布 · WASD 移动相机 · 拖拽图片移动 · 角点缩放 · 顶部手柄旋转</span>
+        <span class="hint">拖入图片到画布 · WASD 移动相机 · 拖拽图片移动 · 角点/边点缩放 · Shift 等比缩放 · 顶部手柄旋转</span>
       </header>
 
       <div id="drop-overlay" class="drop-overlay" hidden>松开以上传图片</div>
 
-      <div id="selection-panel" class="selection-panel" hidden>
+      <aside id="selection-panel" class="selection-panel" aria-hidden="true">
+        <div class="panel-eyebrow">图片检视</div>
         <div class="selection-title" id="selection-title">图片</div>
+        <button id="reset-size" type="button" class="primary-panel-action">还原尺寸</button>
         <div class="selection-actions">
           <button id="layer-up" type="button">上移层级</button>
           <button id="layer-down" type="button">下移层级</button>
           <button id="layer-top" type="button">置顶</button>
           <button id="layer-bottom" type="button">置底</button>
         </div>
-      </div>
+      </aside>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
