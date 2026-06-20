@@ -9,6 +9,15 @@
     <div id="app">
       <canvas id="world-canvas" aria-label="无限 2D 跑团画布"></canvas>
 
+      <section id="identity-screen" class="identity-screen" aria-label="身份选择界面">
+        <div class="identity-card">
+          <p class="panel-eyebrow">进入场景</p>
+          <h1>选择身份</h1>
+          <p class="identity-description">主持人可以编辑地图；玩家只能进入游玩模式并操作自己的角色。</p>
+          <div id="identity-list" class="identity-list"></div>
+        </div>
+      </section>
+
       <header class="toolbar" aria-label="画布工具栏">
         <label class="mode-select-label">
           模式
@@ -25,6 +34,8 @@
         <button id="add-token-button" type="button" class="tool-button" aria-pressed="false">放置角色</button>
         <button id="wall-mode-button" type="button" class="tool-button" aria-pressed="false">编辑阻挡边</button>
         <button id="clear-walls-button" type="button" class="tool-button subtle-button">清空阻挡边</button>
+        <button id="switch-identity-button" type="button" class="tool-button subtle-button">切换身份</button>
+        <span id="identity-badge" class="identity-badge">未登录</span>
         <span class="hint">右键拖动画布移动相机 · 滚轮缩放画面 · 美术地图：背景图 · 逻辑地图：角色/阻挡边 · 游玩模式：拖拽角色</span>
       </header>
 

@@ -49,6 +49,79 @@ button {
   pointer-events: none;
 }
 
+.identity-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at top, rgb(104 191 255 / 18%), transparent 36%),
+    rgb(9 14 22 / 88%);
+  padding: 24px;
+  backdrop-filter: blur(12px);
+}
+
+.identity-screen[hidden] {
+  display: none;
+}
+
+.identity-card {
+  width: min(460px, 100%);
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 20px;
+  background: rgb(15 20 29 / 94%);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 45%);
+  padding: 28px;
+}
+
+.identity-card h1 {
+  font-size: 30px;
+  line-height: 1.15;
+  margin: 0 0 10px;
+}
+
+.identity-description {
+  color: #a9b7c8;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0 0 20px;
+}
+
+.identity-list {
+  display: grid;
+  gap: 10px;
+}
+
+.identity-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 7%);
+  color: #edf4fb;
+  cursor: pointer;
+  padding: 14px 16px;
+  text-align: left;
+}
+
+.identity-option:hover {
+  border-color: rgb(104 191 255 / 70%);
+  background: rgb(104 191 255 / 14%);
+}
+
+.identity-option-name {
+  display: block;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.identity-option-type {
+  color: #93a4b8;
+  font-size: 12px;
+}
+
 .tool-button {
   display: inline-flex;
   min-height: 38px;
@@ -110,6 +183,17 @@ button {
   cursor: pointer;
   font: inherit;
   padding: 6px 8px;
+}
+
+.identity-badge {
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 999px;
+  background: rgb(14 18 25 / 62%);
+  color: #dbe7f3;
+  font-size: 13px;
+  padding: 9px 13px;
+  pointer-events: none;
+  backdrop-filter: blur(12px);
 }
 
 .upload-button input {

@@ -19,6 +19,17 @@ type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 type AppMode = "art" | "logic" | "play";
 type LogicTool = "add-token" | "wall";
 type WallEdgeType = "vertical" | "horizontal";
+type Identity =
+  | {
+      type: "admin";
+      id: "host";
+      name: "主持人";
+    }
+  | {
+      type: "player";
+      id: string;
+      name: string;
+    };
 
 type SceneImage = {
   id: string;
@@ -99,12 +110,16 @@ function mustQuery<T extends Element>(selector: string): T {
 }
 
 const canvas = mustQuery<HTMLCanvasElement>("#world-canvas");
+const identityScreen = mustQuery<HTMLElement>("#identity-screen");
+const identityList = mustQuery<HTMLDivElement>("#identity-list");
 const modeSelect = mustQuery<HTMLSelectElement>("#mode-select");
 const uploadButton = mustQuery<HTMLLabelElement>("#upload-button");
 const uploadInput = mustQuery<HTMLInputElement>("#image-upload");
 const addTokenButton = mustQuery<HTMLButtonElement>("#add-token-button");
 const wallModeButton = mustQuery<HTMLButtonElement>("#wall-mode-button");
 const clearWallsButton = mustQuery<HTMLButtonElement>("#clear-walls-button");
+const switchIdentityButton = mustQuery<HTMLButtonElement>("#switch-identity-button");
+const identityBadge = mustQuery<HTMLSpanElement>("#identity-badge");
 const dropOverlay = mustQuery<HTMLDivElement>("#drop-overlay");
 const selectionPanel = mustQuery<HTMLDivElement>("#selection-panel");
 const selectionTitle = mustQuery<HTMLDivElement>("#selection-title");
@@ -144,6 +159,7 @@ const blockedHorizontalEdges = new Set<string>();
 
 let selectedImageId: string | null = null;
 let selectedTokenId: string | null = null;
+let currentIdentity: Identity | null = null;
 let interaction: Interaction | null = null;
 let appMode: AppMode = "art";
 let logicTool: LogicTool = "wall";
@@ -260,6 +276,93 @@ function getSelectedImage(): SceneImage | null {
 
 function getSelectedToken(): SceneToken | null {
   return sceneTokens.find((token) => token.id === selectedTokenId) ?? null;
+}
+
+function isAdmin(): boolean {
+  return currentIdentity?.type === "admin";
+}
+
+function isLoggedIn(): boolean {
+  return currentIdentity !== null;
+}
+
+function canControlToken(token: SceneToken): boolean {
+  return currentIdentity?.type === "admin" || currentIdentity?.id === token.id;
+}
+
+function availableModes(): AppMode[] {
+  return isAdmin() ? ["art", "logic", "play"] : ["play"];
+}
+
+function rebuildModeOptions(): void {
+  const modes = availableModes();
+  const modeLabels: Record<AppMode, string> = {
+    art: "美术地图",
+    logic: "逻辑地图",
+    play: "游玩模式",
+  };
+
+  modeSelect.replaceChildren(
+    ...modes.map((mode) => {
+      const option = document.createElement("option");
+      option.value = mode;
+      option.textContent = modeLabels[mode];
+      return option;
+    }),
+  );
+}
+
+function renderIdentityList(): void {
+  const identities: Identity[] = [
+    { type: "admin", id: "host", name: "主持人" },
+    ...sceneTokens.map((token) => ({
+      type: "player" as const,
+      id: token.id,
+      name: token.name,
+    })),
+  ];
+
+  identityList.replaceChildren(
+    ...identities.map((identity) => {
+      const button = document.createElement("button");
+      const label = document.createElement("span");
+      const type = document.createElement("span");
+
+      button.type = "button";
+      button.className = "identity-option";
+      label.className = "identity-option-name";
+      type.className = "identity-option-type";
+      label.textContent = identity.name;
+      type.textContent = identity.type === "admin" ? "管理员" : "玩家";
+      button.append(label, type);
+      button.addEventListener("click", () => enterIdentity(identity));
+
+      return button;
+    }),
+  );
+}
+
+function enterIdentity(identity: Identity): void {
+  currentIdentity = identity;
+  identityScreen.hidden = true;
+  identityBadge.textContent = `${identity.name} · ${identity.type === "admin" ? "管理员" : "玩家"}`;
+  rebuildModeOptions();
+  setAppMode(identity.type === "admin" ? "art" : "play");
+}
+
+function showIdentityScreen(): void {
+  currentIdentity = null;
+  selectedImageId = null;
+  selectedTokenId = null;
+  interaction = null;
+  previewPath = [];
+  previewTokenPosition = null;
+  identityBadge.textContent = "未登录";
+  renderIdentityList();
+  rebuildModeOptions();
+  updateModeControls();
+  updateSelectionPanel();
+  identityScreen.hidden = false;
 }
 
 function normalizeZIndexes(): void {
@@ -810,17 +913,19 @@ function setCursor(screenPoint: Vector2): void {
   const resizeHandle = hitTestResizeHandle(screenPoint);
   const worldPoint = screenToWorld(screenPoint);
 
-  if (appMode === "art" && hitTestRotateHandle(screenPoint)) {
+  const tokenHit = hitTestToken(worldPoint);
+
+  if (isAdmin() && appMode === "art" && hitTestRotateHandle(screenPoint)) {
     canvas.style.cursor = "grab";
-  } else if (appMode === "art" && resizeHandle) {
+  } else if (isAdmin() && appMode === "art" && resizeHandle) {
     canvas.style.cursor = getResizeCursor(resizeHandle);
-  } else if (appMode === "logic" && logicTool === "wall") {
+  } else if (isAdmin() && appMode === "logic" && logicTool === "wall") {
     canvas.style.cursor = "crosshair";
-  } else if (appMode === "logic" && logicTool === "add-token") {
+  } else if (isAdmin() && appMode === "logic" && logicTool === "add-token") {
     canvas.style.cursor = occupiedByToken(worldToCell(worldPoint)) ? "not-allowed" : "copy";
-  } else if (appMode === "play" && hitTestToken(worldPoint)) {
+  } else if (isLoggedIn() && appMode === "play" && tokenHit && canControlToken(tokenHit)) {
     canvas.style.cursor = "grab";
-  } else if (appMode === "art" && hitTestImage(worldPoint)) {
+  } else if (isAdmin() && appMode === "art" && hitTestImage(worldPoint)) {
     canvas.style.cursor = "move";
   } else {
     canvas.style.cursor = "default";
@@ -1016,7 +1121,8 @@ function selectToken(tokenId: string | null): void {
 }
 
 function setAppMode(nextMode: AppMode): void {
-  appMode = nextMode;
+  const modes = availableModes();
+  appMode = modes.includes(nextMode) ? nextMode : modes[0];
   interaction = null;
   previewPath = [];
   previewTokenPosition = null;
@@ -1039,30 +1145,35 @@ function setLogicTool(nextTool: LogicTool): void {
 }
 
 function updateModeControls(): void {
+  if (!availableModes().includes(appMode)) {
+    appMode = availableModes()[0];
+  }
+
   modeSelect.value = appMode;
+  modeSelect.disabled = !isLoggedIn();
 
-  uploadInput.disabled = appMode !== "art";
-  uploadButton.classList.toggle("is-disabled", appMode !== "art");
-  uploadButton.classList.toggle("is-hidden", appMode !== "art");
-  addTokenButton.disabled = appMode !== "logic";
-  addTokenButton.classList.toggle("is-hidden", appMode !== "logic");
-  wallModeButton.disabled = appMode !== "logic";
-  wallModeButton.classList.toggle("is-hidden", appMode !== "logic");
-  clearWallsButton.disabled = appMode !== "logic";
-  clearWallsButton.classList.toggle("is-hidden", appMode !== "logic");
-  resetSizeButton.disabled = appMode !== "art";
-  layerUpButton.disabled = appMode !== "art";
-  layerDownButton.disabled = appMode !== "art";
-  layerTopButton.disabled = appMode !== "art";
-  layerBottomButton.disabled = appMode !== "art";
+  uploadInput.disabled = !isLoggedIn() || appMode !== "art" || !isAdmin();
+  uploadButton.classList.toggle("is-disabled", uploadInput.disabled);
+  uploadButton.classList.toggle("is-hidden", !isLoggedIn() || appMode !== "art" || !isAdmin());
+  addTokenButton.disabled = !isLoggedIn() || appMode !== "logic" || !isAdmin();
+  addTokenButton.classList.toggle("is-hidden", !isLoggedIn() || appMode !== "logic" || !isAdmin());
+  wallModeButton.disabled = !isLoggedIn() || appMode !== "logic" || !isAdmin();
+  wallModeButton.classList.toggle("is-hidden", !isLoggedIn() || appMode !== "logic" || !isAdmin());
+  clearWallsButton.disabled = !isLoggedIn() || appMode !== "logic" || !isAdmin();
+  clearWallsButton.classList.toggle("is-hidden", !isLoggedIn() || appMode !== "logic" || !isAdmin());
+  resetSizeButton.disabled = !isLoggedIn() || appMode !== "art" || !isAdmin();
+  layerUpButton.disabled = !isLoggedIn() || appMode !== "art" || !isAdmin();
+  layerDownButton.disabled = !isLoggedIn() || appMode !== "art" || !isAdmin();
+  layerTopButton.disabled = !isLoggedIn() || appMode !== "art" || !isAdmin();
+  layerBottomButton.disabled = !isLoggedIn() || appMode !== "art" || !isAdmin();
 
-  addTokenButton.classList.toggle("is-active", appMode === "logic" && logicTool === "add-token");
-  wallModeButton.classList.toggle("is-active", appMode === "logic" && logicTool === "wall");
-  addTokenButton.setAttribute("aria-pressed", String(appMode === "logic" && logicTool === "add-token"));
-  wallModeButton.setAttribute("aria-pressed", String(appMode === "logic" && logicTool === "wall"));
-  canvas.classList.toggle("is-wall-mode", appMode === "logic" && logicTool === "wall");
-  canvas.classList.toggle("is-art-mode", appMode === "art");
-  canvas.classList.toggle("is-play-mode", appMode === "play");
+  addTokenButton.classList.toggle("is-active", isAdmin() && appMode === "logic" && logicTool === "add-token");
+  wallModeButton.classList.toggle("is-active", isAdmin() && appMode === "logic" && logicTool === "wall");
+  addTokenButton.setAttribute("aria-pressed", String(isAdmin() && appMode === "logic" && logicTool === "add-token"));
+  wallModeButton.setAttribute("aria-pressed", String(isAdmin() && appMode === "logic" && logicTool === "wall"));
+  canvas.classList.toggle("is-wall-mode", isAdmin() && appMode === "logic" && logicTool === "wall");
+  canvas.classList.toggle("is-art-mode", isLoggedIn() && appMode === "art");
+  canvas.classList.toggle("is-play-mode", isLoggedIn() && appMode === "play");
 }
 
 function addTokenAtCell(cell: Cell): void {
@@ -1079,6 +1190,7 @@ function addTokenAtCell(cell: Cell): void {
   };
 
   sceneTokens.push(token);
+  renderIdentityList();
   selectToken(token.id);
 }
 
@@ -1170,23 +1282,27 @@ function resetSelectedImageSize(): void {
 }
 
 modeSelect.addEventListener("change", () => {
+  if (!isLoggedIn()) {
+    return;
+  }
+
   setAppMode(modeSelect.value as AppMode);
 });
 
 addTokenButton.addEventListener("click", () => {
-  if (appMode === "logic") {
+  if (isAdmin() && appMode === "logic") {
     setLogicTool("add-token");
   }
 });
 
 wallModeButton.addEventListener("click", () => {
-  if (appMode === "logic") {
+  if (isAdmin() && appMode === "logic") {
     setLogicTool("wall");
   }
 });
 
 clearWallsButton.addEventListener("click", () => {
-  if (appMode !== "logic") {
+  if (!isAdmin() || appMode !== "logic") {
     return;
   }
 
@@ -1196,7 +1312,7 @@ clearWallsButton.addEventListener("click", () => {
 });
 
 uploadInput.addEventListener("change", () => {
-  if (appMode === "art" && uploadInput.files) {
+  if (isAdmin() && appMode === "art" && uploadInput.files) {
     handleFiles(uploadInput.files);
   }
 
@@ -1225,11 +1341,15 @@ canvas.addEventListener("pointerdown", (event) => {
     return;
   }
 
+  if (!isLoggedIn()) {
+    return;
+  }
+
   const selectedImage = getSelectedImage();
   const rotateHandleHit = hitTestRotateHandle(screenPoint);
   const resizeHandle = hitTestResizeHandle(screenPoint);
 
-  if (appMode === "logic") {
+  if (isAdmin() && appMode === "logic") {
     selectedImageId = null;
     selectedTokenId = null;
     updateSelectionPanel();
@@ -1245,7 +1365,7 @@ canvas.addEventListener("pointerdown", (event) => {
     return;
   }
 
-  if (appMode === "art" && selectedImage && rotateHandleHit) {
+  if (isAdmin() && appMode === "art" && selectedImage && rotateHandleHit) {
     const angle = Math.atan2(worldPoint.y - selectedImage.y, worldPoint.x - selectedImage.x);
     interaction = {
       type: "rotate-image",
@@ -1254,7 +1374,7 @@ canvas.addEventListener("pointerdown", (event) => {
       startAngle: angle,
       startRotation: selectedImage.rotation,
     };
-  } else if (appMode === "art" && selectedImage && resizeHandle) {
+  } else if (isAdmin() && appMode === "art" && selectedImage && resizeHandle) {
     interaction = {
       type: "resize-image",
       imageId: selectedImage.id,
@@ -1267,9 +1387,9 @@ canvas.addEventListener("pointerdown", (event) => {
     };
   } else {
     const tokenHit = appMode === "play" ? hitTestToken(worldPoint) : null;
-    const imageHit = appMode === "art" ? hitTestImage(worldPoint) : null;
+    const imageHit = isAdmin() && appMode === "art" ? hitTestImage(worldPoint) : null;
 
-    if (tokenHit && movingToken?.tokenId !== tokenHit.id) {
+    if (tokenHit && canControlToken(tokenHit) && movingToken?.tokenId !== tokenHit.id) {
       const targetCell = worldToCell(worldPoint);
       const path = findPath(tokenHit.cell, targetCell, tokenHit.id);
       selectToken(tokenHit.id);
@@ -1470,8 +1590,13 @@ layerTopButton.addEventListener("click", () => moveLayer("top"));
 layerBottomButton.addEventListener("click", () => moveLayer("bottom"));
 resetSizeButton.addEventListener("click", resetSelectedImageSize);
 
+switchIdentityButton.addEventListener("click", () => {
+  showIdentityScreen();
+});
+
 window.addEventListener("resize", resizeCanvas);
 
-updateModeControls();
+renderIdentityList();
+showIdentityScreen();
 resizeCanvas();
 requestAnimationFrame(tick);
