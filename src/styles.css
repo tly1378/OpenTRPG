@@ -412,6 +412,27 @@ button {
   opacity: 0.58;
 }
 
+.door-state-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 7%);
+  color: #edf4fb;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 10px 12px;
+}
+
+.door-state-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #94a3b8;
+}
+
 .token-name-display {
   display: flex;
   align-items: center;

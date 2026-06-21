@@ -11,6 +11,7 @@ const sceneImages = [];
 const sceneTokens = [];
 const blockedVerticalEdges = new Set();
 const blockedHorizontalEdges = new Set();
+const sceneDoors = new Map();
 
 const server = createServer((request, response) => {
   if (request.url === "/health") {
@@ -61,6 +62,7 @@ function sceneSnapshotPayload(serverTime = Date.now()) {
     tokens: sceneTokens,
     blockedVerticalEdges: [...blockedVerticalEdges],
     blockedHorizontalEdges: [...blockedHorizontalEdges],
+    doors: [...sceneDoors.values()],
     serverTime,
   };
 }
@@ -99,6 +101,24 @@ function normalizeBlockedEdge(edge) {
     x: edge.x,
     y: edge.y,
     key: `${edge.x},${edge.y}`,
+  };
+}
+
+function doorKey(door) {
+  return `${door.type}:${door.x},${door.y}`;
+}
+
+function normalizeSceneDoor(door) {
+  const edge = normalizeBlockedEdge(door);
+  if (!edge || typeof door.isOpen !== "boolean") {
+    return null;
+  }
+
+  return {
+    type: edge.type,
+    x: edge.x,
+    y: edge.y,
+    isOpen: door.isOpen,
   };
 }
 
@@ -432,6 +452,7 @@ function handleBlockedEdgeSet(client, message) {
 
   const set = blockedEdgeSet(edge.type);
   if (message.blocked) {
+    sceneDoors.delete(doorKey(edge));
     set.add(edge.key);
   } else {
     set.delete(edge.key);
@@ -448,6 +469,37 @@ function handleBlockedEdgesClear(client) {
 
   blockedVerticalEdges.clear();
   blockedHorizontalEdges.clear();
+  client.lastSeenAt = Date.now();
+  broadcastSceneSnapshot();
+}
+
+function handleDoorSet(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  const door = normalizeSceneDoor(message.door);
+  if (!door) {
+    return;
+  }
+
+  blockedEdgeSet(door.type).delete(`${door.x},${door.y}`);
+  sceneDoors.set(doorKey(door), door);
+  client.lastSeenAt = Date.now();
+  broadcastSceneSnapshot();
+}
+
+function handleDoorDelete(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  const edge = normalizeBlockedEdge(message.edge);
+  if (!edge) {
+    return;
+  }
+
+  sceneDoors.delete(doorKey(edge));
   client.lastSeenAt = Date.now();
   broadcastSceneSnapshot();
 }
@@ -533,6 +585,16 @@ wss.on("connection", (socket) => {
 
     if (message.type === "scene:blocked-edges-clear") {
       handleBlockedEdgesClear(client);
+      return;
+    }
+
+    if (message.type === "scene:door-set") {
+      handleDoorSet(client, message);
+      return;
+    }
+
+    if (message.type === "scene:door-delete") {
+      handleDoorDelete(client, message);
     }
   });
 

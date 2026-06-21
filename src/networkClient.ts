@@ -1,4 +1,4 @@
-import type { Identity, SceneImageSnapshot, SceneToken, WallEdgeType } from "./types";
+import type { Identity, SceneDoor, SceneImageSnapshot, SceneToken, WallEdgeType } from "./types";
 
 export type ConnectionStatus = "offline" | "connecting" | "online";
 
@@ -23,6 +23,7 @@ export type SceneSnapshot = {
   tokens: SceneToken[];
   blockedVerticalEdges: string[];
   blockedHorizontalEdges: string[];
+  doors: SceneDoor[];
 };
 
 type NetworkMessage =
@@ -46,6 +47,7 @@ type NetworkMessage =
       tokens: SceneToken[];
       blockedVerticalEdges?: string[];
       blockedHorizontalEdges?: string[];
+      doors?: SceneDoor[];
       serverTime: number;
     };
 
@@ -148,6 +150,20 @@ export class NetworkClient {
     });
   }
 
+  sendDoorChanged(door: SceneDoor): void {
+    this.send({
+      type: "scene:door-set",
+      door,
+    });
+  }
+
+  sendDoorDeleted(type: WallEdgeType, x: number, y: number): void {
+    this.send({
+      type: "scene:door-delete",
+      edge: { type, x, y },
+    });
+  }
+
   disconnect(): void {
     this.identity = null;
     this.clients = [];
@@ -233,6 +249,7 @@ export class NetworkClient {
         tokens: message.tokens,
         blockedVerticalEdges: message.blockedVerticalEdges ?? [],
         blockedHorizontalEdges: message.blockedHorizontalEdges ?? [],
+        doors: message.doors ?? [],
       });
     }
   }

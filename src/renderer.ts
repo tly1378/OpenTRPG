@@ -2,7 +2,17 @@ import { GRID_CELL_SIZE, HANDLE_RADIUS, TOKEN_RADIUS } from "./constants";
 import { easeInOutCubic } from "./geometry";
 import { cellCenter } from "./grid";
 import { getImageCorners, getResizeHandlePositions, getRotateHandlePosition } from "./imageTransform";
-import type { Cell, Interaction, MovingToken, ResizeHandle, SceneImage, SceneToken, Vector2 } from "./types";
+import type {
+  Cell,
+  Interaction,
+  MovingToken,
+  ResizeHandle,
+  SceneDoor,
+  SceneImage,
+  SceneToken,
+  Vector2,
+  WallEdgeType,
+} from "./types";
 
 type Viewport = {
   camera: { x: number; y: number; zoom: number };
@@ -17,6 +27,8 @@ export type RenderState = {
   tokenAvatarImages: Map<string, HTMLImageElement>;
   blockedVerticalEdges: Set<string>;
   blockedHorizontalEdges: Set<string>;
+  doors: SceneDoor[];
+  selectedDoorId: string | null;
   previewPath: Cell[];
   selectedImage: SceneImage | null;
   selectedTokenId: string | null;
@@ -38,6 +50,7 @@ export function renderScene(ctx: CanvasRenderingContext2D, viewport: Viewport, s
   }
 
   drawWalls(ctx, viewport, state.blockedVerticalEdges, state.blockedHorizontalEdges);
+  drawDoors(ctx, viewport, state.doors, state.selectedDoorId);
   if (state.previewPath.length > 0) {
     drawPath(ctx, viewport, state.previewPath);
   }
@@ -120,25 +133,65 @@ function drawWalls(
 
   for (const key of blockedVerticalEdges) {
     const [x, y] = key.split(",").map(Number);
-    const a = viewport.worldToScreen({ x: x * GRID_CELL_SIZE, y: y * GRID_CELL_SIZE });
-    const b = viewport.worldToScreen({ x: x * GRID_CELL_SIZE, y: (y + 1) * GRID_CELL_SIZE });
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
+    drawEdge(ctx, viewport, "vertical", x, y);
   }
 
   for (const key of blockedHorizontalEdges) {
     const [x, y] = key.split(",").map(Number);
-    const a = viewport.worldToScreen({ x: x * GRID_CELL_SIZE, y: y * GRID_CELL_SIZE });
-    const b = viewport.worldToScreen({ x: (x + 1) * GRID_CELL_SIZE, y: y * GRID_CELL_SIZE });
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
+    drawEdge(ctx, viewport, "horizontal", x, y);
   }
 
   ctx.restore();
+}
+
+function drawDoors(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  doors: SceneDoor[],
+  selectedDoorId: string | null,
+): void {
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineWidth = Math.max(4, 6 * viewport.camera.zoom);
+
+  for (const door of doors) {
+    ctx.strokeStyle =
+      selectedDoorId === doorId(door) ? "rgb(250 204 21 / 0.95)" : "rgb(245 158 11 / 0.78)";
+    if (door.isOpen) {
+      ctx.setLineDash([Math.max(6, 10 * viewport.camera.zoom), Math.max(4, 7 * viewport.camera.zoom)]);
+    } else {
+      ctx.setLineDash([]);
+    }
+    drawEdge(ctx, viewport, door.type, door.x, door.y);
+  }
+
+  ctx.restore();
+}
+
+function drawEdge(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  type: WallEdgeType,
+  x: number,
+  y: number,
+): void {
+  const a =
+    type === "vertical"
+      ? viewport.worldToScreen({ x: x * GRID_CELL_SIZE, y: y * GRID_CELL_SIZE })
+      : viewport.worldToScreen({ x: x * GRID_CELL_SIZE, y: y * GRID_CELL_SIZE });
+  const b =
+    type === "vertical"
+      ? viewport.worldToScreen({ x: x * GRID_CELL_SIZE, y: (y + 1) * GRID_CELL_SIZE })
+      : viewport.worldToScreen({ x: (x + 1) * GRID_CELL_SIZE, y: y * GRID_CELL_SIZE });
+
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+}
+
+function doorId(door: Pick<SceneDoor, "type" | "x" | "y">): string {
+  return `${door.type}:${door.x},${door.y}`;
 }
 
 function drawPath(ctx: CanvasRenderingContext2D, viewport: Viewport, path: Cell[]): void {

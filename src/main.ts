@@ -1,5 +1,5 @@
 import "./styles.css";
-import { TOKEN_STEP_ANIMATION_MS } from "./constants";
+import { GRID_CELL_SIZE, TOKEN_STEP_ANIMATION_MS } from "./constants";
 import { mustGetCanvasContext, mustQuery } from "./dom";
 import { add, rotate } from "./geometry";
 import {
@@ -44,10 +44,12 @@ import type {
   Interaction,
   LogicTool,
   MovingToken,
+  SceneDoor,
   SceneImage,
   SceneImageSnapshot,
   SceneToken,
   Vector2,
+  WallEdgeType,
 } from "./types";
 import { createViewport } from "./viewport";
 
@@ -63,6 +65,7 @@ const uploadInput = mustQuery<HTMLInputElement>("#image-upload");
 const addTokenButton = mustQuery<HTMLButtonElement>("#add-token-button");
 const deleteTokenButton = mustQuery<HTMLButtonElement>("#delete-token-button");
 const wallModeButton = mustQuery<HTMLButtonElement>("#wall-mode-button");
+const doorModeButton = mustQuery<HTMLButtonElement>("#door-mode-button");
 const clearWallsButton = mustQuery<HTMLButtonElement>("#clear-walls-button");
 const switchIdentityButton = mustQuery<HTMLButtonElement>("#switch-identity-button");
 const identityBadge = mustQuery<HTMLSpanElement>("#identity-badge");
@@ -89,6 +92,8 @@ const avatarAdjustControls = mustQuery<HTMLDivElement>("#avatar-adjust-controls"
 const editAvatarButton = mustQuery<HTMLButtonElement>("#edit-avatar");
 const resetAvatarAdjustmentButton = mustQuery<HTMLButtonElement>("#reset-avatar-adjustment");
 const tokenPanelHelp = mustQuery<HTMLParagraphElement>("#token-panel-help");
+const doorSelectionForm = mustQuery<HTMLFormElement>("#door-selection-form");
+const doorBlocksMovementInput = mustQuery<HTMLInputElement>("#door-blocks-movement-input");
 const avatarEditorOverlay = mustQuery<HTMLElement>("#avatar-editor-overlay");
 const avatarEditorStage = mustQuery<HTMLDivElement>("#avatar-editor-stage");
 const avatarEditorImage = mustQuery<HTMLImageElement>("#avatar-editor-image");
@@ -119,10 +124,12 @@ const sceneTokens: SceneToken[] = [];
 const tokenAvatarImages = new Map<string, { src: string; image: HTMLImageElement }>();
 const blockedVerticalEdges = new Set<string>();
 const blockedHorizontalEdges = new Set<string>();
+const sceneDoors = new Map<string, SceneDoor>();
 
 let selectedImageId: string | null = null;
 let selectedTokenId: string | null = null;
 let inspectedTokenId: string | null = null;
+let selectedDoorId: string | null = null;
 let currentIdentity: Identity | null = null;
 let interaction: Interaction | null = null;
 let appMode: AppMode = "play";
@@ -239,6 +246,53 @@ function getInspectedToken(): SceneToken | null {
   return sceneTokens.find((token) => token.id === inspectedTokenId) ?? null;
 }
 
+function getSelectedDoor(): SceneDoor | null {
+  return selectedDoorId ? (sceneDoors.get(selectedDoorId) ?? null) : null;
+}
+
+function doorId(door: Pick<SceneDoor, "type" | "x" | "y">): string {
+  return `${door.type}:${door.x},${door.y}`;
+}
+
+function movementBlockedEdgeSets(): { vertical: Set<string>; horizontal: Set<string> } {
+  const vertical = new Set(blockedVerticalEdges);
+  const horizontal = new Set(blockedHorizontalEdges);
+
+  for (const door of sceneDoors.values()) {
+    if (door.isOpen) {
+      continue;
+    }
+
+    blockedEdgeSet(door.type, vertical, horizontal).add(edgeKey(door));
+  }
+
+  return { vertical, horizontal };
+}
+
+function distanceToEdge(worldPoint: Vector2, edge: Pick<SceneDoor, "type" | "x" | "y">): number {
+  if (edge.type === "vertical") {
+    const x = edge.x * GRID_CELL_SIZE;
+    const minY = edge.y * GRID_CELL_SIZE;
+    const maxY = (edge.y + 1) * GRID_CELL_SIZE;
+    return Math.hypot(worldPoint.x - x, worldPoint.y - Math.min(maxY, Math.max(minY, worldPoint.y)));
+  }
+
+  const y = edge.y * GRID_CELL_SIZE;
+  const minX = edge.x * GRID_CELL_SIZE;
+  const maxX = (edge.x + 1) * GRID_CELL_SIZE;
+  return Math.hypot(worldPoint.x - Math.min(maxX, Math.max(minX, worldPoint.x)), worldPoint.y - y);
+}
+
+function hitTestDoor(worldPoint: Vector2): SceneDoor | null {
+  const edge = nearestEditableEdge(worldPoint);
+  const door = sceneDoors.get(doorId(edge));
+  if (!door) {
+    return null;
+  }
+
+  return distanceToEdge(worldPoint, door) <= Math.max(4, 10 / camera.zoom) ? door : null;
+}
+
 function sceneImageSnapshot(image: SceneImage): SceneImageSnapshot {
   const { image: _imageElement, ...snapshot } = image;
   return { ...snapshot };
@@ -305,6 +359,10 @@ function canControlToken(token: SceneToken): boolean {
 
 function canInspectToken(): boolean {
   return isPlayMode();
+}
+
+function canInspectDoor(): boolean {
+  return isPlayMode() && isAdmin();
 }
 
 function isTokenAnimating(tokenId: string): boolean {
@@ -391,6 +449,7 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
     currentIdentity?.type === "player" && !nextTokens.some((token) => token.id === currentIdentity?.id);
   const startedAt = performance.now();
   const animations: MovingToken[] = [];
+  const movementBlockedEdges = movementBlockedEdgeSets();
 
   for (const token of nextTokens) {
     const previousToken = previousTokens.get(token.id);
@@ -403,8 +462,8 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
       token.cell,
       token.id,
       sceneTokens,
-      blockedVerticalEdges,
-      blockedHorizontalEdges,
+      movementBlockedEdges.vertical,
+      movementBlockedEdges.horizontal,
     );
     const animationPath = path.length > 1 ? path : [previousToken.cell, token.cell];
 
@@ -426,6 +485,10 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
   for (const edge of snapshot.blockedHorizontalEdges) {
     blockedHorizontalEdges.add(edge);
   }
+  sceneDoors.clear();
+  for (const door of snapshot.doors) {
+    sceneDoors.set(doorId(door), { ...door });
+  }
   nextTokenIndex = nextAvailableTokenIndex();
 
   if (selectedTokenId && !sceneTokens.some((token) => token.id === selectedTokenId)) {
@@ -435,6 +498,10 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
   if (inspectedTokenId && !sceneTokens.some((token) => token.id === inspectedTokenId)) {
     inspectedTokenId = null;
     tokenNameEditing = false;
+  }
+
+  if (selectedDoorId && !sceneDoors.has(selectedDoorId)) {
+    selectedDoorId = null;
   }
 
   if (currentIdentity?.type === "player") {
@@ -486,6 +553,7 @@ function showIdentityScreen(): void {
   selectedImageId = null;
   selectedTokenId = null;
   inspectedTokenId = null;
+  selectedDoorId = null;
   interaction = null;
   previewPath = [];
   previewTokenPosition = null;
@@ -517,6 +585,8 @@ function render(): void {
       tokenAvatarImages: new Map([...tokenAvatarImages].map(([tokenId, avatar]) => [tokenId, avatar.image])),
       blockedVerticalEdges,
       blockedHorizontalEdges,
+      doors: [...sceneDoors.values()],
+      selectedDoorId,
       previewPath,
       selectedImage: getSelectedImage(),
       selectedTokenId,
@@ -567,17 +637,20 @@ function setCursor(screenPoint: Vector2): void {
   const worldPoint = screenToWorld(screenPoint);
 
   const tokenHit = hitTestToken(worldPoint);
+  const doorHit = canInspectDoor() ? hitTestDoor(worldPoint) : null;
 
   if (isEditingArt() && hitTestRotateHandle(screenPoint)) {
     canvas.style.cursor = "grab";
   } else if (isEditingArt() && resizeHandle) {
     canvas.style.cursor = getResizeCursor(resizeHandle);
-  } else if (isEditingLogic() && logicTool === "wall") {
+  } else if (isEditingLogic() && (logicTool === "wall" || logicTool === "door")) {
     canvas.style.cursor = "crosshair";
   } else if (isEditingLogic() && logicTool === "add-token") {
     canvas.style.cursor = isCellOccupiedByToken(worldToCell(worldPoint), sceneTokens) ? "not-allowed" : "copy";
   } else if (isEditingLogic() && logicTool === "delete-token") {
     canvas.style.cursor = tokenHit ? "pointer" : "default";
+  } else if (doorHit) {
+    canvas.style.cursor = "pointer";
   } else if (isPlayMode() && tokenHit && canControlToken(tokenHit)) {
     canvas.style.cursor = "grab";
   } else if (isEditingArt() && hitTestImage(worldPoint)) {
@@ -617,8 +690,9 @@ function updateRotateInteraction(event: PointerEvent, state: Extract<Interaction
 function updateSelectionPanel(): void {
   const selectedImage = getSelectedImage();
   const selectedToken = canInspectToken() ? getInspectedToken() : null;
+  const selectedDoor = canInspectDoor() ? getSelectedDoor() : null;
 
-  if (!selectedImage && !selectedToken) {
+  if (!selectedImage && !selectedToken && !selectedDoor) {
     selectionPanel.classList.remove("is-open");
     selectionPanel.setAttribute("aria-hidden", "true");
     tokenNameEditing = false;
@@ -632,6 +706,7 @@ function updateSelectionPanel(): void {
     imageSelectionControls.hidden = false;
     imageSelectionActions.hidden = false;
     tokenSelectionForm.hidden = true;
+    doorSelectionForm.hidden = true;
   }
 
   if (selectedToken) {
@@ -643,6 +718,7 @@ function updateSelectionPanel(): void {
     imageSelectionControls.hidden = true;
     imageSelectionActions.hidden = true;
     tokenSelectionForm.hidden = false;
+    doorSelectionForm.hidden = true;
     tokenNameDisplay.hidden = isEditingTokenName;
     tokenNameValue.textContent = selectedToken.name;
     editTokenNameButton.disabled = !canEditToken;
@@ -660,6 +736,18 @@ function updateSelectionPanel(): void {
     }
   }
 
+  if (selectedDoor) {
+    tokenNameEditing = false;
+    selectionEyebrow.textContent = "门检视";
+    selectionTitle.textContent = `${selectedDoor.type === "vertical" ? "纵向" : "横向"}门 (${selectedDoor.x}, ${selectedDoor.y})`;
+    imageSelectionControls.hidden = true;
+    imageSelectionActions.hidden = true;
+    tokenSelectionForm.hidden = true;
+    doorSelectionForm.hidden = false;
+    doorBlocksMovementInput.checked = !selectedDoor.isOpen;
+    doorBlocksMovementInput.disabled = !isAdmin();
+  }
+
   selectionPanel.classList.add("is-open");
   selectionPanel.setAttribute("aria-hidden", "false");
 }
@@ -669,6 +757,7 @@ function selectImage(imageId: string | null): void {
   if (imageId) {
     selectedTokenId = null;
     inspectedTokenId = null;
+    selectedDoorId = null;
     tokenNameEditing = false;
   }
   updateSelectionPanel();
@@ -678,11 +767,23 @@ function selectToken(tokenId: string | null, inspect = false): void {
   selectedTokenId = tokenId;
   if (tokenId) {
     selectedImageId = null;
+    selectedDoorId = null;
     if (inspect && inspectedTokenId !== tokenId) {
       tokenNameEditing = false;
     }
     inspectedTokenId = inspect ? tokenId : inspectedTokenId;
   } else {
+    inspectedTokenId = null;
+    tokenNameEditing = false;
+  }
+  updateSelectionPanel();
+}
+
+function selectDoor(door: SceneDoor | null): void {
+  selectedDoorId = door ? doorId(door) : null;
+  if (door) {
+    selectedImageId = null;
+    selectedTokenId = null;
     inspectedTokenId = null;
     tokenNameEditing = false;
   }
@@ -706,6 +807,10 @@ function setAppMode(nextMode: AppMode): void {
     tokenNameEditing = false;
   }
 
+  if (!canInspectDoor()) {
+    selectedDoorId = null;
+  }
+
   updateModeControls();
   updateSelectionPanel();
 }
@@ -722,6 +827,10 @@ function setEditMode(nextMode: EditMode): void {
 
   if (!isEditingLogic()) {
     selectedTokenId = null;
+  }
+
+  if (!canInspectDoor()) {
+    selectedDoorId = null;
   }
 
   updateModeControls();
@@ -749,6 +858,7 @@ function updateModeControls(): void {
       addTokenButton,
       deleteTokenButton,
       wallModeButton,
+      doorModeButton,
       clearWallsButton,
       resetSizeButton,
       layerUpButton,
@@ -802,6 +912,45 @@ function deleteToken(tokenId: string): void {
   renderIdentityList();
   updateSelectionPanel();
   networkClient.sendTokenDeleted(tokenId);
+}
+
+function toggleDoorAtEdge(edge: { type: WallEdgeType; x: number; y: number }): void {
+  const id = doorId(edge);
+  const existingDoor = sceneDoors.get(id);
+
+  if (existingDoor) {
+    sceneDoors.delete(id);
+    if (selectedDoorId === id) {
+      selectedDoorId = null;
+    }
+    previewPath = [];
+    updateSelectionPanel();
+    networkClient.sendDoorDeleted(edge.type, edge.x, edge.y);
+    return;
+  }
+
+  const door: SceneDoor = { ...edge, isOpen: true };
+  const wallSet = blockedEdgeSet(edge.type, blockedVerticalEdges, blockedHorizontalEdges);
+  const wallKey = edgeKey(edge);
+  if (wallSet.delete(wallKey)) {
+    networkClient.sendBlockedEdgeChanged(edge.type, edge.x, edge.y, false);
+  }
+
+  sceneDoors.set(id, door);
+  previewPath = [];
+  networkClient.sendDoorChanged(door);
+}
+
+function updateSelectedDoorState(isOpen: boolean): void {
+  const door = getSelectedDoor();
+  if (!door || !canInspectDoor() || door.isOpen === isOpen) {
+    return;
+  }
+
+  door.isOpen = isOpen;
+  previewPath = [];
+  networkClient.sendDoorChanged(door);
+  updateSelectionPanel();
 }
 
 function addImageElement(imageElement: HTMLImageElement, src: string, name: string, worldPoint: Vector2): void {
@@ -1075,6 +1224,12 @@ wallModeButton.addEventListener("click", () => {
   }
 });
 
+doorModeButton.addEventListener("click", () => {
+  if (isEditingLogic()) {
+    setLogicTool("door");
+  }
+});
+
 clearWallsButton.addEventListener("click", () => {
   if (!isEditingLogic()) {
     return;
@@ -1105,6 +1260,7 @@ canvas.addEventListener("pointerdown", (event) => {
     selectedImageId = null;
     selectedTokenId = null;
     inspectedTokenId = null;
+    selectedDoorId = null;
     tokenNameEditing = false;
     updateSelectionPanel();
     interaction = {
@@ -1147,11 +1303,24 @@ canvas.addEventListener("pointerdown", (event) => {
     }
 
     const edge = nearestEditableEdge(worldPoint);
+    if (logicTool === "door") {
+      toggleDoorAtEdge(edge);
+      return;
+    }
+
     const set = blockedEdgeSet(edge.type, blockedVerticalEdges, blockedHorizontalEdges);
     const key = edgeKey(edge);
     const blocked = !set.has(key);
+    const doorIdAtEdge = doorId(edge);
+    if (blocked && sceneDoors.delete(doorIdAtEdge)) {
+      if (selectedDoorId === doorIdAtEdge) {
+        selectedDoorId = null;
+      }
+      networkClient.sendDoorDeleted(edge.type, edge.x, edge.y);
+    }
     toggleGridBlockedEdge(edge.type, edge.x, edge.y, blockedVerticalEdges, blockedHorizontalEdges);
     previewPath = [];
+    updateSelectionPanel();
     networkClient.sendBlockedEdgeChanged(edge.type, edge.x, edge.y, blocked);
     return;
   }
@@ -1178,11 +1347,22 @@ canvas.addEventListener("pointerdown", (event) => {
     };
   } else {
     const tokenHit = isPlayMode() ? hitTestToken(worldPoint) : null;
+    const doorHit = canInspectDoor() ? hitTestDoor(worldPoint) : null;
     const imageHit = isEditingArt() ? hitTestImage(worldPoint) : null;
 
-    if (tokenHit && canControlToken(tokenHit) && !isTokenAnimating(tokenHit.id)) {
+    if (doorHit) {
+      selectDoor(doorHit);
+    } else if (tokenHit && canControlToken(tokenHit) && !isTokenAnimating(tokenHit.id)) {
       const targetCell = worldToCell(worldPoint);
-      const path = findGridPath(tokenHit.cell, targetCell, tokenHit.id, sceneTokens, blockedVerticalEdges, blockedHorizontalEdges);
+      const movementBlockedEdges = movementBlockedEdgeSets();
+      const path = findGridPath(
+        tokenHit.cell,
+        targetCell,
+        tokenHit.id,
+        sceneTokens,
+        movementBlockedEdges.vertical,
+        movementBlockedEdges.horizontal,
+      );
       selectToken(tokenHit.id);
       previewTokenPosition = cellCenter(tokenHit.cell);
       previewPath = path;
@@ -1207,6 +1387,7 @@ canvas.addEventListener("pointerdown", (event) => {
       selectedImageId = null;
       selectedTokenId = null;
       inspectedTokenId = null;
+      selectedDoorId = null;
       tokenNameEditing = false;
       updateSelectionPanel();
     }
@@ -1252,13 +1433,14 @@ canvas.addEventListener("pointermove", (event) => {
     previewTokenPosition = cellCenter(targetCell);
 
     if (!sameCell(targetCell, currentInteraction.targetCell)) {
+      const movementBlockedEdges = movementBlockedEdgeSets();
       const path = findGridPath(
         currentInteraction.startCell,
         targetCell,
         currentInteraction.tokenId,
         sceneTokens,
-        blockedVerticalEdges,
-        blockedHorizontalEdges,
+        movementBlockedEdges.vertical,
+        movementBlockedEdges.horizontal,
       );
       currentInteraction.targetCell = targetCell;
       currentInteraction.path = path;
@@ -1430,6 +1612,9 @@ tokenSelectionForm.addEventListener("submit", (event) => {
   event.preventDefault();
   updateSelectedTokenName(tokenNameInput.value);
   stopTokenNameEditing();
+});
+doorBlocksMovementInput.addEventListener("change", () => {
+  updateSelectedDoorState(!doorBlocksMovementInput.checked);
 });
 avatarUploadInput.addEventListener("change", () => {
   const file = avatarUploadInput.files?.[0];

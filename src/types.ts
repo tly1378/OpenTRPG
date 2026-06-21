@@ -16,7 +16,7 @@ export type ClientPointEvent = {
 export type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 export type AppMode = "edit" | "play";
 export type EditMode = "art" | "logic";
-export type LogicTool = "add-token" | "delete-token" | "wall";
+export type LogicTool = "add-token" | "delete-token" | "wall" | "door";
 export type WallEdgeType = "vertical" | "horizontal";
 
 export type Identity =
@@ -57,6 +57,13 @@ export type SceneToken = {
   avatarScale?: number;
   avatarOffsetX?: number;
   avatarOffsetY?: number;
+};
+
+export type SceneDoor = {
+  type: WallEdgeType;
+  x: number;
+  y: number;
+  isOpen: boolean;
 };
 
 export type MovingToken = {

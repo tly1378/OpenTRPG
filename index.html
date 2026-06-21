@@ -40,10 +40,11 @@
         <button id="add-token-button" type="button" class="tool-button" aria-pressed="false">放置角色</button>
         <button id="delete-token-button" type="button" class="tool-button destructive-button" aria-pressed="false">删除角色</button>
         <button id="wall-mode-button" type="button" class="tool-button" aria-pressed="false">编辑阻挡边</button>
+        <button id="door-mode-button" type="button" class="tool-button" aria-pressed="false">编辑门</button>
         <button id="clear-walls-button" type="button" class="tool-button subtle-button">清空阻挡边</button>
         <button id="switch-identity-button" type="button" class="tool-button subtle-button">切换身份</button>
         <span id="identity-badge" class="identity-badge">未登录</span>
-        <span class="hint">右键拖动画布移动相机 · 滚轮缩放画面 · 编辑模式：美术地图/逻辑地图 · 主持/游玩模式：拖拽角色，双击角色检视</span>
+        <span class="hint">右键拖动画布移动相机 · 滚轮缩放画面 · 编辑模式：美术地图/逻辑地图 · 主持/游玩模式：拖拽角色，双击角色检视，主持人点击门检视</span>
       </header>
 
       <div id="drop-overlay" class="drop-overlay" hidden>松开以上传图片</div>
@@ -81,6 +82,13 @@
             </div>
           </div>
           <p id="token-panel-help" class="panel-help">修改后会同步到所有客户端。</p>
+        </form>
+        <form id="door-selection-form" class="door-selection-form" hidden>
+          <label class="door-state-toggle">
+            <input id="door-blocks-movement-input" type="checkbox" />
+            <span>关闭门，并阻挡角色移动</span>
+          </label>
+          <p id="door-panel-help" class="panel-help">打开的门默认不阻挡移动；关闭后会像阻挡边一样影响寻路。</p>
         </form>
       </aside>
 
