@@ -115,7 +115,7 @@ function drawWalls(
   ctx.save();
   ctx.lineCap = "round";
   ctx.lineWidth = Math.max(4, 6 * viewport.camera.zoom);
-  ctx.strokeStyle = "#f97316";
+  ctx.strokeStyle = "rgb(255 255 255 / 0.65)";
 
   for (const key of blockedVerticalEdges) {
     const [x, y] = key.split(",").map(Number);
