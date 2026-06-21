@@ -1,4 +1,4 @@
-import type { Identity, SceneToken } from "./types";
+import type { Identity, SceneToken, WallEdgeType } from "./types";
 
 export type ConnectionStatus = "offline" | "connecting" | "online";
 
@@ -16,6 +16,12 @@ export type NetworkSnapshot = {
   status: ConnectionStatus;
   clients: RemoteClient[];
   error: string | null;
+};
+
+export type SceneSnapshot = {
+  tokens: SceneToken[];
+  blockedVerticalEdges: string[];
+  blockedHorizontalEdges: string[];
 };
 
 type NetworkMessage =
@@ -36,6 +42,8 @@ type NetworkMessage =
   | {
       type: "scene:snapshot";
       tokens: SceneToken[];
+      blockedVerticalEdges?: string[];
+      blockedHorizontalEdges?: string[];
       serverTime: number;
     };
 
@@ -55,7 +63,7 @@ export class NetworkClient {
 
   constructor(
     private readonly onChange: (snapshot: NetworkSnapshot) => void,
-    private readonly onSceneTokensChange: (tokens: SceneToken[]) => void,
+    private readonly onSceneChange: (snapshot: SceneSnapshot) => void,
   ) {}
 
   connect(identity: NetworkIdentity | null = null): void {
@@ -77,6 +85,20 @@ export class NetworkClient {
       type: "scene:token-move",
       tokenId: token.id,
       cell: token.cell,
+    });
+  }
+
+  sendBlockedEdgeChanged(type: WallEdgeType, x: number, y: number, blocked: boolean): void {
+    this.send({
+      type: "scene:blocked-edge-set",
+      edge: { type, x, y },
+      blocked,
+    });
+  }
+
+  sendBlockedEdgesCleared(): void {
+    this.send({
+      type: "scene:blocked-edges-clear",
     });
   }
 
@@ -160,7 +182,11 @@ export class NetworkClient {
     }
 
     if (message.type === "scene:snapshot") {
-      this.onSceneTokensChange(message.tokens);
+      this.onSceneChange({
+        tokens: message.tokens,
+        blockedVerticalEdges: message.blockedVerticalEdges ?? [],
+        blockedHorizontalEdges: message.blockedHorizontalEdges ?? [],
+      });
     }
   }
 

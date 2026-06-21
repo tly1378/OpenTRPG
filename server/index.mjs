@@ -7,6 +7,8 @@ const pingIntervalMs = 2500;
 
 const clients = new Map();
 const sceneTokens = [];
+const blockedVerticalEdges = new Set();
+const blockedHorizontalEdges = new Set();
 
 const server = createServer((request, response) => {
   if (request.url === "/health") {
@@ -50,11 +52,19 @@ function broadcastStatus() {
   }
 }
 
-function broadcastSceneTokens() {
-  const payload = {
+function sceneSnapshotPayload(serverTime = Date.now()) {
+  return {
     type: "scene:snapshot",
     tokens: sceneTokens,
-    serverTime: Date.now(),
+    blockedVerticalEdges: [...blockedVerticalEdges],
+    blockedHorizontalEdges: [...blockedHorizontalEdges],
+    serverTime,
+  };
+}
+
+function broadcastSceneSnapshot() {
+  const payload = {
+    ...sceneSnapshotPayload(),
   };
 
   for (const client of clients.values()) {
@@ -69,6 +79,28 @@ function isFiniteCell(cell) {
     Number.isFinite(cell.x) &&
     Number.isFinite(cell.y)
   );
+}
+
+function normalizeBlockedEdge(edge) {
+  if (!edge || typeof edge !== "object") {
+    return null;
+  }
+
+  const type = edge.type === "vertical" ? "vertical" : edge.type === "horizontal" ? "horizontal" : null;
+  if (!type || !Number.isFinite(edge.x) || !Number.isFinite(edge.y)) {
+    return null;
+  }
+
+  return {
+    type,
+    x: edge.x,
+    y: edge.y,
+    key: `${edge.x},${edge.y}`,
+  };
+}
+
+function blockedEdgeSet(type) {
+  return type === "vertical" ? blockedVerticalEdges : blockedHorizontalEdges;
 }
 
 function normalizeSceneToken(token) {
@@ -126,11 +158,7 @@ function handleHello(client, message) {
     serverTime: client.lastSeenAt,
   });
   broadcastStatus();
-  sendJson(client.socket, {
-    type: "scene:snapshot",
-    tokens: sceneTokens,
-    serverTime: client.lastSeenAt,
-  });
+  sendJson(client.socket, sceneSnapshotPayload(client.lastSeenAt));
 }
 
 function handlePong(client, message) {
@@ -160,7 +188,7 @@ function handleSceneTokenAdd(client, message) {
     sceneTokens[existingTokenIndex] = token;
   }
 
-  broadcastSceneTokens();
+  broadcastSceneSnapshot();
 }
 
 function canControlToken(client, token) {
@@ -180,7 +208,39 @@ function handleSceneTokenMove(client, message) {
     y: cell.y,
   };
   client.lastSeenAt = Date.now();
-  broadcastSceneTokens();
+  broadcastSceneSnapshot();
+}
+
+function handleBlockedEdgeSet(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  const edge = normalizeBlockedEdge(message.edge);
+  if (!edge || typeof message.blocked !== "boolean") {
+    return;
+  }
+
+  const set = blockedEdgeSet(edge.type);
+  if (message.blocked) {
+    set.add(edge.key);
+  } else {
+    set.delete(edge.key);
+  }
+
+  client.lastSeenAt = Date.now();
+  broadcastSceneSnapshot();
+}
+
+function handleBlockedEdgesClear(client) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  blockedVerticalEdges.clear();
+  blockedHorizontalEdges.clear();
+  client.lastSeenAt = Date.now();
+  broadcastSceneSnapshot();
 }
 
 wss.on("connection", (socket) => {
@@ -201,7 +261,7 @@ wss.on("connection", (socket) => {
 
   clients.set(clientId, client);
   sendJson(socket, { type: "ready", clientId, serverTime: now });
-  sendJson(socket, { type: "scene:snapshot", tokens: sceneTokens, serverTime: now });
+  sendJson(socket, sceneSnapshotPayload(now));
   broadcastStatus();
 
   socket.on("message", (data) => {
@@ -229,6 +289,16 @@ wss.on("connection", (socket) => {
 
     if (message.type === "scene:token-move") {
       handleSceneTokenMove(client, message);
+      return;
+    }
+
+    if (message.type === "scene:blocked-edge-set") {
+      handleBlockedEdgeSet(client, message);
+      return;
+    }
+
+    if (message.type === "scene:blocked-edges-clear") {
+      handleBlockedEdgesClear(client);
     }
   });
 

@@ -3,7 +3,9 @@ import { TOKEN_STEP_ANIMATION_MS } from "./constants";
 import { mustGetCanvasContext, mustQuery } from "./dom";
 import { add, rotate } from "./geometry";
 import {
+  blockedEdgeSet,
   cellCenter,
+  edgeKey,
   findPath as findGridPath,
   nearestEditableEdge,
   occupiedByToken as isCellOccupiedByToken,
@@ -25,7 +27,7 @@ import {
 } from "./hitTesting";
 import { buildIdentities, identityLabel, rebuildModeOptions as rebuildModeSelectOptions, renderIdentityList as renderIdentityOptions } from "./identityUi";
 import { updateModeControls as applyModeControls } from "./modeControls";
-import { NetworkClient, type NetworkSnapshot } from "./networkClient";
+import { NetworkClient, type NetworkSnapshot, type SceneSnapshot } from "./networkClient";
 import { renderScene } from "./renderer";
 import { createSceneImage, createSceneToken, moveImageLayer, normalizeImageZIndexes, resetImageSize } from "./sceneActions";
 import type {
@@ -108,7 +110,7 @@ const networkClient = new NetworkClient(
     latestNetworkSnapshot = snapshot;
     renderLatencyPanel();
   },
-  applySceneTokens,
+  applySceneSnapshot,
 );
 
 function formatLatency(latencyMs: number | null): string {
@@ -205,7 +207,8 @@ function renderIdentityList(): void {
   renderIdentityOptions(identityList, buildIdentities(sceneTokens), enterIdentity);
 }
 
-function applySceneTokens(tokens: SceneToken[]): void {
+function applySceneSnapshot(snapshot: SceneSnapshot): void {
+  const { tokens } = snapshot;
   const previousTokens = new Map(sceneTokens.map((token) => [token.id, token]));
   const nextTokens = tokens.map((token) => ({ ...token, cell: { ...token.cell } }));
   const startedAt = performance.now();
@@ -236,6 +239,14 @@ function applySceneTokens(tokens: SceneToken[]): void {
   }
 
   sceneTokens.splice(0, sceneTokens.length, ...nextTokens);
+  blockedVerticalEdges.clear();
+  blockedHorizontalEdges.clear();
+  for (const edge of snapshot.blockedVerticalEdges) {
+    blockedVerticalEdges.add(edge);
+  }
+  for (const edge of snapshot.blockedHorizontalEdges) {
+    blockedHorizontalEdges.add(edge);
+  }
   nextTokenIndex = nextAvailableTokenIndex();
 
   if (selectedTokenId && !sceneTokens.some((token) => token.id === selectedTokenId)) {
@@ -567,6 +578,7 @@ clearWallsButton.addEventListener("click", () => {
   blockedVerticalEdges.clear();
   blockedHorizontalEdges.clear();
   previewPath = [];
+  networkClient.sendBlockedEdgesCleared();
 });
 
 uploadInput.addEventListener("change", () => {
@@ -618,8 +630,12 @@ canvas.addEventListener("pointerdown", (event) => {
     }
 
     const edge = nearestEditableEdge(worldPoint);
+    const set = blockedEdgeSet(edge.type, blockedVerticalEdges, blockedHorizontalEdges);
+    const key = edgeKey(edge);
+    const blocked = !set.has(key);
     toggleGridBlockedEdge(edge.type, edge.x, edge.y, blockedVerticalEdges, blockedHorizontalEdges);
     previewPath = [];
+    networkClient.sendBlockedEdgeChanged(edge.type, edge.x, edge.y, blocked);
     return;
   }
 
