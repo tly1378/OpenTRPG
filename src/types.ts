@@ -33,6 +33,7 @@ export type Identity =
 export type SceneImage = {
   id: string;
   image: HTMLImageElement;
+  src: string;
   name: string;
   x: number;
   y: number;
@@ -43,6 +44,8 @@ export type SceneImage = {
   rotation: number;
   z: number;
 };
+
+export type SceneImageSnapshot = Omit<SceneImage, "image">;
 
 export type SceneToken = {
   id: string;

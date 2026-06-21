@@ -6,6 +6,7 @@ const port = Number.parseInt(process.env.PORT ?? "8787", 10);
 const pingIntervalMs = 2500;
 
 const clients = new Map();
+const sceneImages = [];
 const sceneTokens = [];
 const blockedVerticalEdges = new Set();
 const blockedHorizontalEdges = new Set();
@@ -55,6 +56,7 @@ function broadcastStatus() {
 function sceneSnapshotPayload(serverTime = Date.now()) {
   return {
     type: "scene:snapshot",
+    images: sceneImages,
     tokens: sceneTokens,
     blockedVerticalEdges: [...blockedVerticalEdges],
     blockedHorizontalEdges: [...blockedHorizontalEdges],
@@ -101,6 +103,70 @@ function normalizeBlockedEdge(edge) {
 
 function blockedEdgeSet(type) {
   return type === "vertical" ? blockedVerticalEdges : blockedHorizontalEdges;
+}
+
+function normalizeImageZIndexes() {
+  sceneImages
+    .sort((a, b) => a.z - b.z)
+    .forEach((image, index) => {
+      image.z = index + 1;
+    });
+}
+
+function normalizeSceneImage(image) {
+  if (!image || typeof image !== "object") {
+    return null;
+  }
+
+  const id = String(image.id ?? "");
+  const name = String(image.name ?? "");
+  const src = String(image.src ?? "");
+  const numericFields = [
+    image.x,
+    image.y,
+    image.width,
+    image.height,
+    image.originalWidth,
+    image.originalHeight,
+    image.rotation,
+    image.z,
+  ];
+
+  if (
+    !id ||
+    !name ||
+    !src.startsWith("data:image/") ||
+    numericFields.some((value) => !Number.isFinite(value)) ||
+    image.width <= 0 ||
+    image.height <= 0 ||
+    image.originalWidth <= 0 ||
+    image.originalHeight <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    src,
+    name,
+    x: image.x,
+    y: image.y,
+    width: image.width,
+    height: image.height,
+    originalWidth: image.originalWidth,
+    originalHeight: image.originalHeight,
+    rotation: image.rotation,
+    z: image.z,
+  };
+}
+
+function upsertSceneImage(image) {
+  const existingImageIndex = sceneImages.findIndex((candidate) => candidate.id === image.id);
+  if (existingImageIndex === -1) {
+    sceneImages.push(image);
+  } else {
+    sceneImages[existingImageIndex] = image;
+  }
 }
 
 function normalizeSceneToken(token) {
@@ -188,6 +254,63 @@ function handleSceneTokenAdd(client, message) {
     sceneTokens[existingTokenIndex] = token;
   }
 
+  broadcastSceneSnapshot();
+}
+
+function handleSceneImageAdd(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  const image = normalizeSceneImage(message.image);
+  if (!image) {
+    return;
+  }
+
+  upsertSceneImage(image);
+  normalizeImageZIndexes();
+  client.lastSeenAt = Date.now();
+  broadcastSceneSnapshot();
+}
+
+function handleSceneImageUpdate(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  const image = normalizeSceneImage(message.image);
+  if (!image || !sceneImages.some((candidate) => candidate.id === image.id)) {
+    return;
+  }
+
+  upsertSceneImage(image);
+  normalizeImageZIndexes();
+  client.lastSeenAt = Date.now();
+  broadcastSceneSnapshot();
+}
+
+function handleSceneImagesUpdate(client, message) {
+  if (client.identity.type !== "admin" || !Array.isArray(message.images)) {
+    return;
+  }
+
+  let hasChanged = false;
+  for (const candidate of message.images) {
+    const image = normalizeSceneImage(candidate);
+    if (!image || !sceneImages.some((existingImage) => existingImage.id === image.id)) {
+      continue;
+    }
+
+    upsertSceneImage(image);
+    hasChanged = true;
+  }
+
+  if (!hasChanged) {
+    return;
+  }
+
+  normalizeImageZIndexes();
+  client.lastSeenAt = Date.now();
   broadcastSceneSnapshot();
 }
 
@@ -284,6 +407,21 @@ wss.on("connection", (socket) => {
 
     if (message.type === "scene:token-add") {
       handleSceneTokenAdd(client, message);
+      return;
+    }
+
+    if (message.type === "scene:image-add") {
+      handleSceneImageAdd(client, message);
+      return;
+    }
+
+    if (message.type === "scene:image-update") {
+      handleSceneImageUpdate(client, message);
+      return;
+    }
+
+    if (message.type === "scene:images-update") {
+      handleSceneImagesUpdate(client, message);
       return;
     }
 

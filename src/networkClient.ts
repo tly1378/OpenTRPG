@@ -1,4 +1,4 @@
-import type { Identity, SceneToken, WallEdgeType } from "./types";
+import type { Identity, SceneImageSnapshot, SceneToken, WallEdgeType } from "./types";
 
 export type ConnectionStatus = "offline" | "connecting" | "online";
 
@@ -19,6 +19,7 @@ export type NetworkSnapshot = {
 };
 
 export type SceneSnapshot = {
+  images: SceneImageSnapshot[];
   tokens: SceneToken[];
   blockedVerticalEdges: string[];
   blockedHorizontalEdges: string[];
@@ -41,6 +42,7 @@ type NetworkMessage =
     }
   | {
       type: "scene:snapshot";
+      images?: SceneImageSnapshot[];
       tokens: SceneToken[];
       blockedVerticalEdges?: string[];
       blockedHorizontalEdges?: string[];
@@ -77,6 +79,27 @@ export class NetworkClient {
     this.send({
       type: "scene:token-add",
       token,
+    });
+  }
+
+  sendImageAdded(image: SceneImageSnapshot): void {
+    this.send({
+      type: "scene:image-add",
+      image,
+    });
+  }
+
+  sendImageUpdated(image: SceneImageSnapshot): void {
+    this.send({
+      type: "scene:image-update",
+      image,
+    });
+  }
+
+  sendImagesUpdated(images: SceneImageSnapshot[]): void {
+    this.send({
+      type: "scene:images-update",
+      images,
     });
   }
 
@@ -183,6 +206,7 @@ export class NetworkClient {
 
     if (message.type === "scene:snapshot") {
       this.onSceneChange({
+        images: message.images ?? [],
         tokens: message.tokens,
         blockedVerticalEdges: message.blockedVerticalEdges ?? [],
         blockedHorizontalEdges: message.blockedHorizontalEdges ?? [],

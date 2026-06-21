@@ -18,7 +18,7 @@ import {
   getResizeCursor,
   getResizeHandlePositions,
 } from "./imageTransform";
-import { defaultImageDropPoint, hasDraggedImage, loadImageFiles } from "./imageImport";
+import { defaultImageDropPoint, hasDraggedImage, loadImageFiles, loadImageSource } from "./imageImport";
 import {
   hitTestImage as findHitImage,
   hitTestResizeHandle as findHitResizeHandle,
@@ -38,6 +38,7 @@ import type {
   LogicTool,
   MovingToken,
   SceneImage,
+  SceneImageSnapshot,
   SceneToken,
   Vector2,
 } from "./types";
@@ -99,6 +100,7 @@ let dragDepth = 0;
 let movingTokens: MovingToken[] = [];
 let previewTokenPosition: Vector2 | null = null;
 let previewPath: Cell[] = [];
+let imageSnapshotVersion = 0;
 let latestNetworkSnapshot: NetworkSnapshot = {
   status: "offline",
   clients: [],
@@ -179,6 +181,19 @@ function getSelectedToken(): SceneToken | null {
   return sceneTokens.find((token) => token.id === selectedTokenId) ?? null;
 }
 
+function sceneImageSnapshot(image: SceneImage): SceneImageSnapshot {
+  const { image: _imageElement, ...snapshot } = image;
+  return { ...snapshot };
+}
+
+function sceneImageSnapshots(): SceneImageSnapshot[] {
+  return sceneImages.map(sceneImageSnapshot);
+}
+
+function updateNextZFromImages(): void {
+  nextZ = Math.max(0, ...sceneImages.map((image) => image.z)) + 1;
+}
+
 function isAdmin(): boolean {
   return currentIdentity?.type === "admin";
 }
@@ -207,7 +222,47 @@ function renderIdentityList(): void {
   renderIdentityOptions(identityList, buildIdentities(sceneTokens), enterIdentity);
 }
 
+async function applyImageSnapshots(snapshots: SceneImageSnapshot[]): Promise<void> {
+  const version = ++imageSnapshotVersion;
+  const existingImages = new Map(sceneImages.map((image) => [image.id, image]));
+  const nextImages = await Promise.all(
+    snapshots.map(async (snapshot): Promise<SceneImage | null> => {
+      const existingImage = existingImages.get(snapshot.id);
+      if (existingImage?.src === snapshot.src) {
+        Object.assign(existingImage, snapshot);
+        return existingImage;
+      }
+
+      try {
+        const imageElement = await loadImageSource(snapshot.src, snapshot.name);
+        return {
+          ...snapshot,
+          image: imageElement,
+        };
+      } catch (error) {
+        console.error(error);
+        return null;
+      }
+    }),
+  );
+
+  if (version !== imageSnapshotVersion) {
+    return;
+  }
+
+  sceneImages.splice(0, sceneImages.length, ...nextImages.filter((image): image is SceneImage => image !== null));
+  updateNextZFromImages();
+
+  if (selectedImageId && !sceneImages.some((image) => image.id === selectedImageId)) {
+    selectedImageId = null;
+  }
+
+  updateSelectionPanel();
+}
+
 function applySceneSnapshot(snapshot: SceneSnapshot): void {
+  void applyImageSnapshots(snapshot.images);
+
   const { tokens } = snapshot;
   const previousTokens = new Map(sceneTokens.map((token) => [token.id, token]));
   const nextTokens = tokens.map((token) => ({ ...token, cell: { ...token.cell } }));
@@ -510,12 +565,13 @@ function addTokenAtCell(cell: Cell): void {
   networkClient.sendTokenAdded(token);
 }
 
-function addImageElement(imageElement: HTMLImageElement, name: string, worldPoint: Vector2): void {
-  const entity = createSceneImage(imageElement, name, worldPoint, nextZ++);
+function addImageElement(imageElement: HTMLImageElement, src: string, name: string, worldPoint: Vector2): void {
+  const entity = createSceneImage(imageElement, src, name, worldPoint, nextZ++);
 
   sceneImages.push(entity);
   normalizeZIndexes();
   selectImage(entity.id);
+  networkClient.sendImageAdded(sceneImageSnapshot(entity));
 }
 
 function handleFiles(files: FileList | File[], screenPoint?: Vector2): void {
@@ -524,7 +580,7 @@ function handleFiles(files: FileList | File[], screenPoint?: Vector2): void {
   void loadImageFiles(files)
     .then((loadedImages) => {
       for (const loadedImage of loadedImages) {
-        addImageElement(loadedImage.image, loadedImage.name, targetWorldPoint);
+        addImageElement(loadedImage.image, loadedImage.src, loadedImage.name, targetWorldPoint);
       }
     })
     .catch((error: unknown) => {
@@ -539,6 +595,7 @@ function moveLayer(direction: "up" | "down" | "top" | "bottom"): void {
   }
 
   nextZ = moveImageLayer(sceneImages, selectedImage, direction, nextZ);
+  networkClient.sendImagesUpdated(sceneImageSnapshots());
 }
 
 function resetSelectedImageSize(): void {
@@ -548,6 +605,7 @@ function resetSelectedImageSize(): void {
   }
 
   resetImageSize(selectedImage);
+  networkClient.sendImageUpdated(sceneImageSnapshot(selectedImage));
 }
 
 modeSelect.addEventListener("change", () => {
@@ -759,6 +817,17 @@ canvas.addEventListener("pointerup", (event) => {
   const currentInteraction = interaction;
 
   if (currentInteraction?.pointerId === event.pointerId) {
+    if (
+      currentInteraction.type === "move-image" ||
+      currentInteraction.type === "resize-image" ||
+      currentInteraction.type === "rotate-image"
+    ) {
+      const image = sceneImages.find((candidate) => candidate.id === currentInteraction.imageId);
+      if (image) {
+        networkClient.sendImageUpdated(sceneImageSnapshot(image));
+      }
+    }
+
     if (currentInteraction.type === "drag-token") {
       const token = sceneTokens.find((candidate) => candidate.id === currentInteraction.tokenId);
       if (token && currentInteraction.path.length > 1) {

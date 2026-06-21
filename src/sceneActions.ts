@@ -13,6 +13,7 @@ export function normalizeImageZIndexes(images: SceneImage[]): number {
 
 export function createSceneImage(
   imageElement: HTMLImageElement,
+  src: string,
   name: string,
   worldPoint: { x: number; y: number },
   z: number,
@@ -25,6 +26,7 @@ export function createSceneImage(
   return {
     id: crypto.randomUUID(),
     image: imageElement,
+    src,
     name,
     x: worldPoint.x,
     y: worldPoint.y,
