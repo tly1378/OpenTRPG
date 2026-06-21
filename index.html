@@ -41,6 +41,7 @@
         <button id="delete-token-button" type="button" class="tool-button destructive-button" aria-pressed="false">删除角色</button>
         <button id="wall-mode-button" type="button" class="tool-button" aria-pressed="false">编辑阻挡边</button>
         <button id="door-mode-button" type="button" class="tool-button" aria-pressed="false">编辑门</button>
+        <button id="room-mode-button" type="button" class="tool-button" aria-pressed="false">设置房间</button>
         <button id="clear-walls-button" type="button" class="tool-button subtle-button">清空阻挡边</button>
         <button id="switch-identity-button" type="button" class="tool-button subtle-button">切换身份</button>
         <span id="identity-badge" class="identity-badge">未登录</span>
@@ -89,6 +90,13 @@
             <span>关闭门，并阻挡角色移动</span>
           </label>
           <p id="door-panel-help" class="panel-help">打开的门默认不阻挡移动；关闭后会像阻挡边一样影响寻路。</p>
+        </form>
+        <form id="room-selection-form" class="room-selection-form" hidden>
+          <label class="panel-field">
+            <span>房间名称</span>
+            <input id="room-name-input" type="text" maxlength="32" autocomplete="off" placeholder="输入房间名称" />
+          </label>
+          <p id="room-panel-help" class="panel-help">名称会以大号半透明字体显示在地图上。</p>
         </form>
       </aside>
 

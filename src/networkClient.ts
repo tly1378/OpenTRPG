@@ -1,4 +1,4 @@
-import type { Identity, SceneDoor, SceneImageSnapshot, SceneToken, WallEdgeType } from "./types";
+import type { Identity, SceneDoor, SceneImageSnapshot, SceneRoom, SceneToken, WallEdgeType } from "./types";
 
 export type ConnectionStatus = "offline" | "connecting" | "online";
 
@@ -24,6 +24,7 @@ export type SceneSnapshot = {
   blockedVerticalEdges: string[];
   blockedHorizontalEdges: string[];
   doors: SceneDoor[];
+  rooms: SceneRoom[];
 };
 
 type NetworkMessage =
@@ -48,6 +49,7 @@ type NetworkMessage =
       blockedVerticalEdges?: string[];
       blockedHorizontalEdges?: string[];
       doors?: SceneDoor[];
+      rooms?: SceneRoom[];
       serverTime: number;
     };
 
@@ -164,6 +166,13 @@ export class NetworkClient {
     });
   }
 
+  sendRoomUpdated(room: SceneRoom): void {
+    this.send({
+      type: "scene:room-update",
+      room,
+    });
+  }
+
   disconnect(): void {
     this.identity = null;
     this.clients = [];
@@ -250,6 +259,7 @@ export class NetworkClient {
         blockedVerticalEdges: message.blockedVerticalEdges ?? [],
         blockedHorizontalEdges: message.blockedHorizontalEdges ?? [],
         doors: message.doors ?? [],
+        rooms: message.rooms ?? [],
       });
     }
   }

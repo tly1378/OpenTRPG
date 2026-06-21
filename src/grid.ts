@@ -1,6 +1,6 @@
 import { GRID_CELL_SIZE } from "./constants";
 import { distance } from "./geometry";
-import type { Cell, SceneToken, Vector2, WallEdgeType } from "./types";
+import type { Cell, SceneDoor, SceneToken, Vector2, WallEdgeType } from "./types";
 
 export function sameCell(a: Cell, b: Cell): boolean {
   return a.x === b.x && a.y === b.y;
@@ -197,6 +197,55 @@ export function findPath(
   return path.reverse();
 }
 
+export function findClosedRegion(
+  start: Cell,
+  blockedVerticalEdges: Set<string>,
+  blockedHorizontalEdges: Set<string>,
+): Cell[] {
+  const bounds = blockingBounds(blockedVerticalEdges, blockedHorizontalEdges);
+  if (!bounds) {
+    return [];
+  }
+
+  const minX = bounds.minX - 1;
+  const maxX = bounds.maxX + 1;
+  const minY = bounds.minY - 1;
+  const maxY = bounds.maxY + 1;
+  if (start.x < minX || start.x > maxX || start.y < minY || start.y > maxY) {
+    return [];
+  }
+
+  const queue: Cell[] = [start];
+  const visited = new Map<string, Cell>([[cellKey(start), start]]);
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      continue;
+    }
+
+    if (current.x <= minX || current.x >= maxX || current.y <= minY || current.y >= maxY) {
+      return [];
+    }
+
+    for (const next of cardinalNeighbors(current)) {
+      if (!canMoveCardinal(current, next, blockedVerticalEdges, blockedHorizontalEdges)) {
+        continue;
+      }
+
+      const key = cellKey(next);
+      if (visited.has(key)) {
+        continue;
+      }
+
+      visited.set(key, next);
+      queue.push(next);
+    }
+  }
+
+  return [...visited.values()].sort((a, b) => a.y - b.y || a.x - b.x);
+}
+
 export function nearestEditableEdge(worldPoint: Vector2): { type: WallEdgeType; x: number; y: number } {
   const cell = worldToCell(worldPoint);
   const localX = worldPoint.x - cell.x * GRID_CELL_SIZE;
@@ -212,6 +261,61 @@ export function nearestEditableEdge(worldPoint: Vector2): { type: WallEdgeType; 
   if (minDistance === bottom) return { type: "horizontal", x: cell.x, y: cell.y };
 
   return { type: "horizontal", x: cell.x, y: cell.y + 1 };
+}
+
+export function roomKeyFromCells(cells: Cell[]): string {
+  return cells.map(cellKey).sort().join("|");
+}
+
+export function roomCenter(cells: Cell[]): Vector2 {
+  if (cells.length === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  const sum = cells.reduce(
+    (total, cell) => ({
+      x: total.x + cell.x + 0.5,
+      y: total.y + cell.y + 0.5,
+    }),
+    { x: 0, y: 0 },
+  );
+
+  return {
+    x: (sum.x / cells.length) * GRID_CELL_SIZE,
+    y: (sum.y / cells.length) * GRID_CELL_SIZE,
+  };
+}
+
+export function movementBlockedEdgeSets(
+  blockedVerticalEdges: Set<string>,
+  blockedHorizontalEdges: Set<string>,
+  doors: Iterable<SceneDoor>,
+): { vertical: Set<string>; horizontal: Set<string> } {
+  const vertical = new Set(blockedVerticalEdges);
+  const horizontal = new Set(blockedHorizontalEdges);
+
+  for (const door of doors) {
+    if (!door.isOpen) {
+      blockedEdgeSet(door.type, vertical, horizontal).add(edgeKey(door));
+    }
+  }
+
+  return { vertical, horizontal };
+}
+
+export function roomBoundaryEdgeSets(
+  blockedVerticalEdges: Set<string>,
+  blockedHorizontalEdges: Set<string>,
+  doors: Iterable<SceneDoor>,
+): { vertical: Set<string>; horizontal: Set<string> } {
+  const vertical = new Set(blockedVerticalEdges);
+  const horizontal = new Set(blockedHorizontalEdges);
+
+  for (const door of doors) {
+    blockedEdgeSet(door.type, vertical, horizontal).add(edgeKey(door));
+  }
+
+  return { vertical, horizontal };
 }
 
 function getNeighborCells(
@@ -243,4 +347,41 @@ function getNeighborCells(
   }
 
   return neighbors;
+}
+
+function blockingBounds(
+  blockedVerticalEdges: Set<string>,
+  blockedHorizontalEdges: Set<string>,
+): { minX: number; maxX: number; minY: number; maxY: number } | null {
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const key of blockedVerticalEdges) {
+    const [x, y] = key.split(",").map(Number);
+    minX = Math.min(minX, x - 1);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  }
+
+  for (const key of blockedHorizontalEdges) {
+    const [x, y] = key.split(",").map(Number);
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y - 1);
+    maxY = Math.max(maxY, y);
+  }
+
+  return Number.isFinite(minX) ? { minX, maxX, minY, maxY } : null;
+}
+
+function cardinalNeighbors(cell: Cell): Cell[] {
+  return [
+    { x: cell.x + 1, y: cell.y },
+    { x: cell.x - 1, y: cell.y },
+    { x: cell.x, y: cell.y + 1 },
+    { x: cell.x, y: cell.y - 1 },
+  ];
 }

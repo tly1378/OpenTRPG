@@ -11,6 +11,7 @@ type ModeControls = {
   deleteTokenButton: HTMLButtonElement;
   wallModeButton: HTMLButtonElement;
   doorModeButton: HTMLButtonElement;
+  roomModeButton: HTMLButtonElement;
   clearWallsButton: HTMLButtonElement;
   resetSizeButton: HTMLButtonElement;
   layerUpButton: HTMLButtonElement;
@@ -52,6 +53,8 @@ export function updateModeControls(
   controls.wallModeButton.classList.toggle("is-hidden", !isEditingLogic);
   controls.doorModeButton.disabled = !isEditingLogic;
   controls.doorModeButton.classList.toggle("is-hidden", !isEditingLogic);
+  controls.roomModeButton.disabled = !isEditingLogic;
+  controls.roomModeButton.classList.toggle("is-hidden", !isEditingLogic);
   controls.clearWallsButton.disabled = !isEditingLogic;
   controls.clearWallsButton.classList.toggle("is-hidden", !isEditingLogic);
   controls.resetSizeButton.disabled = !isEditingArt;
@@ -64,11 +67,16 @@ export function updateModeControls(
   controls.deleteTokenButton.classList.toggle("is-active", isEditingLogic && logicTool === "delete-token");
   controls.wallModeButton.classList.toggle("is-active", isEditingLogic && logicTool === "wall");
   controls.doorModeButton.classList.toggle("is-active", isEditingLogic && logicTool === "door");
+  controls.roomModeButton.classList.toggle("is-active", isEditingLogic && logicTool === "room");
   controls.addTokenButton.setAttribute("aria-pressed", String(isEditingLogic && logicTool === "add-token"));
   controls.deleteTokenButton.setAttribute("aria-pressed", String(isEditingLogic && logicTool === "delete-token"));
   controls.wallModeButton.setAttribute("aria-pressed", String(isEditingLogic && logicTool === "wall"));
   controls.doorModeButton.setAttribute("aria-pressed", String(isEditingLogic && logicTool === "door"));
-  controls.canvas.classList.toggle("is-wall-mode", isEditingLogic && (logicTool === "wall" || logicTool === "door"));
+  controls.roomModeButton.setAttribute("aria-pressed", String(isEditingLogic && logicTool === "room"));
+  controls.canvas.classList.toggle(
+    "is-wall-mode",
+    isEditingLogic && (logicTool === "wall" || logicTool === "door" || logicTool === "room"),
+  );
   controls.canvas.classList.toggle("is-art-mode", isEditingArt);
   controls.canvas.classList.toggle("is-play-mode", isLoggedIn && appMode === "play");
 }

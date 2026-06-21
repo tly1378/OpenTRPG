@@ -1,6 +1,6 @@
 import { GRID_CELL_SIZE, HANDLE_RADIUS, TOKEN_RADIUS } from "./constants";
 import { easeInOutCubic } from "./geometry";
-import { cellCenter } from "./grid";
+import { cellCenter, roomCenter } from "./grid";
 import { getImageCorners, getResizeHandlePositions, getRotateHandlePosition } from "./imageTransform";
 import type {
   Cell,
@@ -9,6 +9,7 @@ import type {
   ResizeHandle,
   SceneDoor,
   SceneImage,
+  SceneRoom,
   SceneToken,
   Vector2,
   WallEdgeType,
@@ -29,6 +30,9 @@ export type RenderState = {
   blockedHorizontalEdges: Set<string>;
   doors: SceneDoor[];
   selectedDoorId: string | null;
+  rooms: SceneRoom[];
+  selectedRoomId: string | null;
+  previewRoomCells: Cell[];
   previewPath: Cell[];
   selectedImage: SceneImage | null;
   selectedTokenId: string | null;
@@ -49,6 +53,7 @@ export function renderScene(ctx: CanvasRenderingContext2D, viewport: Viewport, s
     drawImageEntity(ctx, viewport, image);
   }
 
+  drawRooms(ctx, viewport, state.rooms, state.selectedRoomId, state.previewRoomCells);
   drawWalls(ctx, viewport, state.blockedVerticalEdges, state.blockedHorizontalEdges);
   drawDoors(ctx, viewport, state.doors, state.selectedDoorId);
   if (state.previewPath.length > 0) {
@@ -117,6 +122,57 @@ function drawGrid(ctx: CanvasRenderingContext2D, viewport: Viewport): void {
   ctx.fillStyle = "#7fd3ff";
   ctx.font = "12px ui-sans-serif, system-ui, sans-serif";
   ctx.fillText("(0, 0)", origin.x + 8, origin.y - 8);
+  ctx.restore();
+}
+
+function drawRooms(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  rooms: SceneRoom[],
+  selectedRoomId: string | null,
+  previewRoomCells: Cell[],
+): void {
+  ctx.save();
+
+  for (const room of rooms) {
+    const isSelected = room.id === selectedRoomId;
+    drawRoomCells(ctx, viewport, room.cells, isSelected ? "rgb(34 211 238 / 0.24)" : "rgb(34 211 238 / 0.16)");
+    if (room.name) {
+      drawRoomName(ctx, viewport, room);
+    }
+  }
+
+  if (previewRoomCells.length > 0) {
+    drawRoomCells(ctx, viewport, previewRoomCells, "rgb(250 204 21 / 0.22)");
+  }
+
+  ctx.restore();
+}
+
+function drawRoomCells(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  cells: Cell[],
+  fillStyle: string,
+): void {
+  ctx.fillStyle = fillStyle;
+  for (const cell of cells) {
+    const topLeft = viewport.worldToScreen({ x: cell.x * GRID_CELL_SIZE, y: (cell.y + 1) * GRID_CELL_SIZE });
+    const bottomRight = viewport.worldToScreen({ x: (cell.x + 1) * GRID_CELL_SIZE, y: cell.y * GRID_CELL_SIZE });
+    ctx.fillRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+  }
+}
+
+function drawRoomName(ctx: CanvasRenderingContext2D, viewport: Viewport, room: SceneRoom): void {
+  const center = viewport.worldToScreen(roomCenter(room.cells));
+  const fontSize = Math.max(28, 44 * viewport.camera.zoom);
+
+  ctx.save();
+  ctx.fillStyle = "rgb(255 255 255 / 0.28)";
+  ctx.font = `800 ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(room.name, center.x, center.y);
   ctx.restore();
 }
 

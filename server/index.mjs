@@ -12,6 +12,7 @@ const sceneTokens = [];
 const blockedVerticalEdges = new Set();
 const blockedHorizontalEdges = new Set();
 const sceneDoors = new Map();
+const sceneRooms = new Map();
 
 const server = createServer((request, response) => {
   if (request.url === "/health") {
@@ -63,6 +64,7 @@ function sceneSnapshotPayload(serverTime = Date.now()) {
     blockedVerticalEdges: [...blockedVerticalEdges],
     blockedHorizontalEdges: [...blockedHorizontalEdges],
     doors: [...sceneDoors.values()],
+    rooms: [...sceneRooms.values()],
     serverTime,
   };
 }
@@ -119,6 +121,40 @@ function normalizeSceneDoor(door) {
     x: edge.x,
     y: edge.y,
     isOpen: door.isOpen,
+  };
+}
+
+function normalizeSceneRoom(room) {
+  if (!room || typeof room !== "object" || !Array.isArray(room.cells)) {
+    return null;
+  }
+
+  const id = String(room.id ?? "");
+  const name = String(room.name ?? "").trim().slice(0, 32);
+  if (!id || room.cells.length === 0 || room.cells.length > 2048) {
+    return null;
+  }
+
+  const cells = [];
+  const seenCells = new Set();
+  for (const cell of room.cells) {
+    if (!isFiniteCell(cell)) {
+      return null;
+    }
+
+    const key = `${cell.x},${cell.y}`;
+    if (seenCells.has(key)) {
+      continue;
+    }
+
+    seenCells.add(key);
+    cells.push({ x: cell.x, y: cell.y });
+  }
+
+  return {
+    id,
+    name,
+    cells,
   };
 }
 
@@ -504,6 +540,21 @@ function handleDoorDelete(client, message) {
   broadcastSceneSnapshot();
 }
 
+function handleRoomUpdate(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  const room = normalizeSceneRoom(message.room);
+  if (!room) {
+    return;
+  }
+
+  sceneRooms.set(room.id, room);
+  client.lastSeenAt = Date.now();
+  broadcastSceneSnapshot();
+}
+
 wss.on("connection", (socket) => {
   const clientId = randomUUID();
   const now = Date.now();
@@ -595,6 +646,11 @@ wss.on("connection", (socket) => {
 
     if (message.type === "scene:door-delete") {
       handleDoorDelete(client, message);
+      return;
+    }
+
+    if (message.type === "scene:room-update") {
+      handleRoomUpdate(client, message);
     }
   });
 
