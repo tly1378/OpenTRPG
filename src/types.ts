@@ -14,7 +14,8 @@ export type ClientPointEvent = {
 };
 
 export type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
-export type AppMode = "art" | "logic" | "play";
+export type AppMode = "edit" | "play";
+export type EditMode = "art" | "logic";
 export type LogicTool = "add-token" | "delete-token" | "wall";
 export type WallEdgeType = "vertical" | "horizontal";
 

@@ -22,9 +22,15 @@
         <label class="mode-select-label">
           模式
           <select id="mode-select" class="mode-select">
+            <option value="edit">编辑模式</option>
+            <option value="play">主持模式</option>
+          </select>
+        </label>
+        <label class="mode-select-label edit-mode-select-label">
+          编辑
+          <select id="edit-mode-select" class="mode-select">
             <option value="art">美术地图</option>
             <option value="logic">逻辑地图</option>
-            <option value="play">游玩模式</option>
           </select>
         </label>
         <label id="upload-button" class="tool-button upload-button">
@@ -37,7 +43,7 @@
         <button id="clear-walls-button" type="button" class="tool-button subtle-button">清空阻挡边</button>
         <button id="switch-identity-button" type="button" class="tool-button subtle-button">切换身份</button>
         <span id="identity-badge" class="identity-badge">未登录</span>
-        <span class="hint">右键拖动画布移动相机 · 滚轮缩放画面 · 美术地图：背景图 · 逻辑地图：角色/阻挡边 · 游玩模式：拖拽角色</span>
+        <span class="hint">右键拖动画布移动相机 · 滚轮缩放画面 · 编辑模式：美术地图/逻辑地图 · 主持/游玩模式：拖拽角色</span>
       </header>
 
       <div id="drop-overlay" class="drop-overlay" hidden>松开以上传图片</div>

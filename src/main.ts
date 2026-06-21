@@ -25,7 +25,13 @@ import {
   hitTestRotateHandle as findHitRotateHandle,
   hitTestToken as findHitToken,
 } from "./hitTesting";
-import { buildIdentities, identityLabel, rebuildModeOptions as rebuildModeSelectOptions, renderIdentityList as renderIdentityOptions } from "./identityUi";
+import {
+  buildIdentities,
+  identityLabel,
+  rebuildEditModeOptions as rebuildEditModeSelectOptions,
+  rebuildModeOptions as rebuildModeSelectOptions,
+  renderIdentityList as renderIdentityOptions,
+} from "./identityUi";
 import { updateModeControls as applyModeControls } from "./modeControls";
 import { NetworkClient, type NetworkSnapshot, type SceneSnapshot } from "./networkClient";
 import { renderScene } from "./renderer";
@@ -33,6 +39,7 @@ import { createSceneImage, createSceneToken, moveImageLayer, normalizeImageZInde
 import type {
   AppMode,
   Cell,
+  EditMode,
   Identity,
   Interaction,
   LogicTool,
@@ -47,7 +54,10 @@ import { createViewport } from "./viewport";
 const canvas = mustQuery<HTMLCanvasElement>("#world-canvas");
 const identityScreen = mustQuery<HTMLElement>("#identity-screen");
 const identityList = mustQuery<HTMLDivElement>("#identity-list");
+const modeSelectLabel = mustQuery<HTMLLabelElement>(".mode-select-label");
 const modeSelect = mustQuery<HTMLSelectElement>("#mode-select");
+const editModeSelectLabel = mustQuery<HTMLLabelElement>(".edit-mode-select-label");
+const editModeSelect = mustQuery<HTMLSelectElement>("#edit-mode-select");
 const uploadButton = mustQuery<HTMLLabelElement>("#upload-button");
 const uploadInput = mustQuery<HTMLInputElement>("#image-upload");
 const addTokenButton = mustQuery<HTMLButtonElement>("#add-token-button");
@@ -93,7 +103,8 @@ let selectedImageId: string | null = null;
 let selectedTokenId: string | null = null;
 let currentIdentity: Identity | null = null;
 let interaction: Interaction | null = null;
-let appMode: AppMode = "art";
+let appMode: AppMode = "play";
+let editMode: EditMode = "art";
 let logicTool: LogicTool = "wall";
 let nextZ = 1;
 let nextTokenIndex = 1;
@@ -203,6 +214,18 @@ function isLoggedIn(): boolean {
   return currentIdentity !== null;
 }
 
+function isEditingArt(): boolean {
+  return isAdmin() && appMode === "edit" && editMode === "art";
+}
+
+function isEditingLogic(): boolean {
+  return isAdmin() && appMode === "edit" && editMode === "logic";
+}
+
+function isPlayMode(): boolean {
+  return isLoggedIn() && appMode === "play";
+}
+
 function canControlToken(token: SceneToken): boolean {
   return currentIdentity?.type === "admin" || currentIdentity?.id === token.id;
 }
@@ -212,11 +235,12 @@ function isTokenAnimating(tokenId: string): boolean {
 }
 
 function availableModes(): AppMode[] {
-  return isAdmin() ? ["art", "logic", "play"] : ["play"];
+  return isAdmin() ? ["edit", "play"] : ["play"];
 }
 
 function rebuildModeOptions(): void {
   rebuildModeSelectOptions(modeSelect, availableModes());
+  rebuildEditModeSelectOptions(editModeSelect, ["art", "logic"]);
 }
 
 function renderIdentityList(): void {
@@ -340,7 +364,7 @@ function enterIdentity(identity: Identity): void {
   identityScreen.hidden = true;
   identityBadge.textContent = identityLabel(identity);
   rebuildModeOptions();
-  setAppMode(identity.type === "admin" ? "art" : "play");
+  setAppMode(identity.type === "admin" ? "edit" : "play");
   networkClient.connect(identity);
   renderLatencyPanel();
 }
@@ -431,19 +455,19 @@ function setCursor(screenPoint: Vector2): void {
 
   const tokenHit = hitTestToken(worldPoint);
 
-  if (isAdmin() && appMode === "art" && hitTestRotateHandle(screenPoint)) {
+  if (isEditingArt() && hitTestRotateHandle(screenPoint)) {
     canvas.style.cursor = "grab";
-  } else if (isAdmin() && appMode === "art" && resizeHandle) {
+  } else if (isEditingArt() && resizeHandle) {
     canvas.style.cursor = getResizeCursor(resizeHandle);
-  } else if (isAdmin() && appMode === "logic" && logicTool === "wall") {
+  } else if (isEditingLogic() && logicTool === "wall") {
     canvas.style.cursor = "crosshair";
-  } else if (isAdmin() && appMode === "logic" && logicTool === "add-token") {
+  } else if (isEditingLogic() && logicTool === "add-token") {
     canvas.style.cursor = isCellOccupiedByToken(worldToCell(worldPoint), sceneTokens) ? "not-allowed" : "copy";
-  } else if (isAdmin() && appMode === "logic" && logicTool === "delete-token") {
+  } else if (isEditingLogic() && logicTool === "delete-token") {
     canvas.style.cursor = tokenHit ? "pointer" : "default";
-  } else if (isLoggedIn() && appMode === "play" && tokenHit && canControlToken(tokenHit)) {
+  } else if (isPlayMode() && tokenHit && canControlToken(tokenHit)) {
     canvas.style.cursor = "grab";
-  } else if (isAdmin() && appMode === "art" && hitTestImage(worldPoint)) {
+  } else if (isEditingArt() && hitTestImage(worldPoint)) {
     canvas.style.cursor = "move";
   } else {
     canvas.style.cursor = "default";
@@ -514,11 +538,29 @@ function setAppMode(nextMode: AppMode): void {
   previewPath = [];
   previewTokenPosition = null;
 
-  if (appMode !== "art") {
+  if (!isEditingArt()) {
     selectedImageId = null;
   }
 
-  if (appMode !== "play") {
+  if (!isPlayMode()) {
+    selectedTokenId = null;
+  }
+
+  updateModeControls();
+  updateSelectionPanel();
+}
+
+function setEditMode(nextMode: EditMode): void {
+  editMode = nextMode;
+  interaction = null;
+  previewPath = [];
+  previewTokenPosition = null;
+
+  if (!isEditingArt()) {
+    selectedImageId = null;
+  }
+
+  if (!isEditingLogic()) {
     selectedTokenId = null;
   }
 
@@ -538,7 +580,10 @@ function updateModeControls(): void {
 
   applyModeControls(
     {
+      modeSelectLabel,
       modeSelect,
+      editModeSelectLabel,
+      editModeSelect,
       uploadInput,
       uploadButton,
       addTokenButton,
@@ -554,6 +599,7 @@ function updateModeControls(): void {
     },
     {
       appMode,
+      editMode,
       logicTool,
       isLoggedIn: isLoggedIn(),
       isAdmin: isAdmin(),
@@ -644,26 +690,34 @@ modeSelect.addEventListener("change", () => {
   setAppMode(modeSelect.value as AppMode);
 });
 
+editModeSelect.addEventListener("change", () => {
+  if (!isAdmin() || appMode !== "edit") {
+    return;
+  }
+
+  setEditMode(editModeSelect.value as EditMode);
+});
+
 addTokenButton.addEventListener("click", () => {
-  if (isAdmin() && appMode === "logic") {
+  if (isEditingLogic()) {
     setLogicTool("add-token");
   }
 });
 
 deleteTokenButton.addEventListener("click", () => {
-  if (isAdmin() && appMode === "logic") {
+  if (isEditingLogic()) {
     setLogicTool("delete-token");
   }
 });
 
 wallModeButton.addEventListener("click", () => {
-  if (isAdmin() && appMode === "logic") {
+  if (isEditingLogic()) {
     setLogicTool("wall");
   }
 });
 
 clearWallsButton.addEventListener("click", () => {
-  if (!isAdmin() || appMode !== "logic") {
+  if (!isEditingLogic()) {
     return;
   }
 
@@ -674,7 +728,7 @@ clearWallsButton.addEventListener("click", () => {
 });
 
 uploadInput.addEventListener("change", () => {
-  if (isAdmin() && appMode === "art" && uploadInput.files) {
+  if (isEditingArt() && uploadInput.files) {
     handleFiles(uploadInput.files);
   }
 
@@ -711,7 +765,7 @@ canvas.addEventListener("pointerdown", (event) => {
   const rotateHandleHit = hitTestRotateHandle(screenPoint);
   const resizeHandle = hitTestResizeHandle(screenPoint);
 
-  if (isAdmin() && appMode === "logic") {
+  if (isEditingLogic()) {
     selectedImageId = null;
     selectedTokenId = null;
     updateSelectionPanel();
@@ -739,7 +793,7 @@ canvas.addEventListener("pointerdown", (event) => {
     return;
   }
 
-  if (isAdmin() && appMode === "art" && selectedImage && rotateHandleHit) {
+  if (isEditingArt() && selectedImage && rotateHandleHit) {
     const angle = Math.atan2(worldPoint.y - selectedImage.y, worldPoint.x - selectedImage.x);
     interaction = {
       type: "rotate-image",
@@ -748,7 +802,7 @@ canvas.addEventListener("pointerdown", (event) => {
       startAngle: angle,
       startRotation: selectedImage.rotation,
     };
-  } else if (isAdmin() && appMode === "art" && selectedImage && resizeHandle) {
+  } else if (isEditingArt() && selectedImage && resizeHandle) {
     interaction = {
       type: "resize-image",
       imageId: selectedImage.id,
@@ -760,8 +814,8 @@ canvas.addEventListener("pointerdown", (event) => {
       startRotation: selectedImage.rotation,
     };
   } else {
-    const tokenHit = appMode === "play" ? hitTestToken(worldPoint) : null;
-    const imageHit = isAdmin() && appMode === "art" ? hitTestImage(worldPoint) : null;
+    const tokenHit = isPlayMode() ? hitTestToken(worldPoint) : null;
+    const imageHit = isEditingArt() ? hitTestImage(worldPoint) : null;
 
     if (tokenHit && canControlToken(tokenHit) && !isTokenAnimating(tokenHit.id)) {
       const targetCell = worldToCell(worldPoint);
@@ -928,7 +982,7 @@ canvas.addEventListener(
 );
 
 window.addEventListener("dragenter", (event) => {
-  if (appMode !== "art" || !hasDraggedImage(event)) {
+  if (!isEditingArt() || !hasDraggedImage(event)) {
     return;
   }
 
@@ -938,7 +992,7 @@ window.addEventListener("dragenter", (event) => {
 });
 
 window.addEventListener("dragover", (event) => {
-  if (appMode !== "art" && hasDraggedImage(event)) {
+  if (!isEditingArt() && hasDraggedImage(event)) {
     event.preventDefault();
     return;
   }
@@ -951,7 +1005,7 @@ window.addEventListener("dragover", (event) => {
 });
 
 window.addEventListener("dragleave", (event) => {
-  if (appMode !== "art" || !hasDraggedImage(event)) {
+  if (!isEditingArt() || !hasDraggedImage(event)) {
     return;
   }
 
@@ -961,7 +1015,7 @@ window.addEventListener("dragleave", (event) => {
 });
 
 window.addEventListener("drop", (event) => {
-  if (appMode !== "art") {
+  if (!isEditingArt()) {
     if (hasDraggedImage(event)) {
       event.preventDefault();
     }

@@ -1,11 +1,15 @@
-import type { AppMode, Identity, SceneToken } from "./types";
+import type { AppMode, EditMode, Identity, SceneToken } from "./types";
 
 export const HOST_IDENTITY: Identity = { type: "admin", id: "host", name: "主持人" };
 
 const MODE_LABELS: Record<AppMode, string> = {
+  edit: "编辑模式",
+  play: "主持模式",
+};
+
+const EDIT_MODE_LABELS: Record<EditMode, string> = {
   art: "美术地图",
   logic: "逻辑地图",
-  play: "游玩模式",
 };
 
 export function buildIdentities(tokens: SceneToken[]): Identity[] {
@@ -50,6 +54,17 @@ export function rebuildModeOptions(modeSelect: HTMLSelectElement, modes: AppMode
       const option = document.createElement("option");
       option.value = mode;
       option.textContent = MODE_LABELS[mode];
+      return option;
+    }),
+  );
+}
+
+export function rebuildEditModeOptions(editModeSelect: HTMLSelectElement, editModes: EditMode[]): void {
+  editModeSelect.replaceChildren(
+    ...editModes.map((mode) => {
+      const option = document.createElement("option");
+      option.value = mode;
+      option.textContent = EDIT_MODE_LABELS[mode];
       return option;
     }),
   );
