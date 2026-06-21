@@ -68,12 +68,18 @@ const switchIdentityButton = mustQuery<HTMLButtonElement>("#switch-identity-butt
 const identityBadge = mustQuery<HTMLSpanElement>("#identity-badge");
 const dropOverlay = mustQuery<HTMLDivElement>("#drop-overlay");
 const selectionPanel = mustQuery<HTMLDivElement>("#selection-panel");
+const selectionEyebrow = mustQuery<HTMLDivElement>("#selection-eyebrow");
 const selectionTitle = mustQuery<HTMLDivElement>("#selection-title");
+const imageSelectionControls = mustQuery<HTMLDivElement>("#image-selection-controls");
+const imageSelectionActions = mustQuery<HTMLDivElement>("#image-selection-actions");
 const resetSizeButton = mustQuery<HTMLButtonElement>("#reset-size");
 const layerUpButton = mustQuery<HTMLButtonElement>("#layer-up");
 const layerDownButton = mustQuery<HTMLButtonElement>("#layer-down");
 const layerTopButton = mustQuery<HTMLButtonElement>("#layer-top");
 const layerBottomButton = mustQuery<HTMLButtonElement>("#layer-bottom");
+const tokenSelectionForm = mustQuery<HTMLFormElement>("#token-selection-form");
+const tokenNameInput = mustQuery<HTMLInputElement>("#token-name-input");
+const tokenPanelHelp = mustQuery<HTMLParagraphElement>("#token-panel-help");
 
 const ctx = mustGetCanvasContext(canvas);
 const latencyPanel = document.createElement("aside");
@@ -113,6 +119,7 @@ let movingTokens: MovingToken[] = [];
 let previewTokenPosition: Vector2 | null = null;
 let previewPath: Cell[] = [];
 let imageSnapshotVersion = 0;
+const pendingTokenNames = new Map<string, string>();
 let latestNetworkSnapshot: NetworkSnapshot = {
   status: "offline",
   clients: [],
@@ -230,6 +237,10 @@ function canControlToken(token: SceneToken): boolean {
   return currentIdentity?.type === "admin" || currentIdentity?.id === token.id;
 }
 
+function canInspectToken(): boolean {
+  return isPlayMode();
+}
+
 function isTokenAnimating(tokenId: string): boolean {
   return movingTokens.some((animation) => animation.tokenId === tokenId);
 }
@@ -291,6 +302,25 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
   const { tokens } = snapshot;
   const previousTokens = new Map(sceneTokens.map((token) => [token.id, token]));
   const nextTokens = tokens.map((token) => ({ ...token, cell: { ...token.cell } }));
+  for (const token of nextTokens) {
+    const pendingName = pendingTokenNames.get(token.id);
+    if (!pendingName) {
+      continue;
+    }
+
+    if (token.name === pendingName) {
+      pendingTokenNames.delete(token.id);
+    } else {
+      token.name = pendingName;
+    }
+  }
+  const nextTokenIds = new Set(nextTokens.map((token) => token.id));
+  for (const tokenId of pendingTokenNames.keys()) {
+    if (!nextTokenIds.has(tokenId)) {
+      pendingTokenNames.delete(tokenId);
+    }
+  }
+
   const shouldExitDeletedIdentity =
     currentIdentity?.type === "player" && !nextTokens.some((token) => token.id === currentIdentity?.id);
   const startedAt = performance.now();
@@ -333,6 +363,15 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
 
   if (selectedTokenId && !sceneTokens.some((token) => token.id === selectedTokenId)) {
     selectedTokenId = null;
+  }
+
+  if (currentIdentity?.type === "player") {
+    const currentToken = sceneTokens.find((token) => token.id === currentIdentity?.id);
+    if (currentToken && currentIdentity.name !== currentToken.name) {
+      currentIdentity = { ...currentIdentity, name: currentToken.name };
+      networkClient.updateIdentity(currentIdentity);
+      identityBadge.textContent = identityLabel(currentIdentity);
+    }
   }
 
   movingTokens = [
@@ -503,14 +542,38 @@ function updateRotateInteraction(event: PointerEvent, state: Extract<Interaction
 
 function updateSelectionPanel(): void {
   const selectedImage = getSelectedImage();
+  const selectedToken = canInspectToken() ? getSelectedToken() : null;
 
-  if (!selectedImage) {
+  if (!selectedImage && !selectedToken) {
     selectionPanel.classList.remove("is-open");
     selectionPanel.setAttribute("aria-hidden", "true");
     return;
   }
 
-  selectionTitle.textContent = selectedImage.name;
+  if (selectedImage) {
+    selectionEyebrow.textContent = "图片检视";
+    selectionTitle.textContent = selectedImage.name;
+    imageSelectionControls.hidden = false;
+    imageSelectionActions.hidden = false;
+    tokenSelectionForm.hidden = true;
+  }
+
+  if (selectedToken) {
+    const canEditToken = canControlToken(selectedToken);
+
+    selectionEyebrow.textContent = "角色检视";
+    selectionTitle.textContent = selectedToken.name;
+    imageSelectionControls.hidden = true;
+    imageSelectionActions.hidden = true;
+    tokenSelectionForm.hidden = false;
+    tokenNameInput.disabled = !canEditToken;
+    tokenPanelHelp.textContent = canEditToken ? "修改后会同步到所有客户端。" : "只有主持人或该角色玩家可以修改姓名。";
+
+    if (document.activeElement !== tokenNameInput) {
+      tokenNameInput.value = selectedToken.name;
+    }
+  }
+
   selectionPanel.classList.add("is-open");
   selectionPanel.setAttribute("aria-hidden", "false");
 }
@@ -628,6 +691,7 @@ function deleteToken(tokenId: string): void {
   }
 
   sceneTokens.splice(tokenIndex, 1);
+  pendingTokenNames.delete(tokenId);
   movingTokens = movingTokens.filter((animation) => animation.tokenId !== tokenId);
   if (selectedTokenId === tokenId) {
     selectedTokenId = null;
@@ -680,6 +744,31 @@ function resetSelectedImageSize(): void {
 
   resetImageSize(selectedImage);
   networkClient.sendImageUpdated(sceneImageSnapshot(selectedImage));
+}
+
+function sendTokenNameUpdate(token: SceneToken): void {
+  pendingTokenNames.set(token.id, token.name);
+  networkClient.sendTokenUpdated(token);
+}
+
+function updateSelectedTokenName(name: string): void {
+  const token = getSelectedToken();
+  const normalizedName = name.trim();
+  if (!token || !canControlToken(token) || normalizedName.length === 0 || token.name === normalizedName) {
+    return;
+  }
+
+  token.name = normalizedName.slice(0, 24);
+
+  if (currentIdentity?.type === "player" && currentIdentity.id === token.id) {
+    currentIdentity = { ...currentIdentity, name: token.name };
+    networkClient.updateIdentity(currentIdentity);
+    identityBadge.textContent = identityLabel(currentIdentity);
+  }
+
+  renderIdentityList();
+  updateSelectionPanel();
+  sendTokenNameUpdate(token);
 }
 
 modeSelect.addEventListener("change", () => {
@@ -963,6 +1052,25 @@ canvas.addEventListener("pointercancel", (event) => {
   setCursor(screenPointFromEvent(event));
 });
 
+canvas.addEventListener("dblclick", (event) => {
+  if (!canInspectToken()) {
+    return;
+  }
+
+  const tokenHit = hitTestToken(screenToWorld(screenPointFromEvent(event)));
+  if (!tokenHit) {
+    return;
+  }
+
+  event.preventDefault();
+  selectToken(tokenHit.id);
+
+  if (canControlToken(tokenHit)) {
+    tokenNameInput.focus();
+    tokenNameInput.select();
+  }
+});
+
 canvas.addEventListener("contextmenu", (event) => {
   event.preventDefault();
 });
@@ -1039,6 +1147,17 @@ layerDownButton.addEventListener("click", () => moveLayer("down"));
 layerTopButton.addEventListener("click", () => moveLayer("top"));
 layerBottomButton.addEventListener("click", () => moveLayer("bottom"));
 resetSizeButton.addEventListener("click", resetSelectedImageSize);
+tokenNameInput.addEventListener("input", () => {
+  updateSelectedTokenName(tokenNameInput.value);
+});
+tokenNameInput.addEventListener("change", () => {
+  updateSelectedTokenName(tokenNameInput.value);
+});
+tokenSelectionForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  updateSelectedTokenName(tokenNameInput.value);
+  tokenNameInput.blur();
+});
 
 switchIdentityButton.addEventListener("click", () => {
   showIdentityScreen();

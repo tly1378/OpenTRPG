@@ -193,6 +193,11 @@ function normalizeSceneToken(token) {
   };
 }
 
+function normalizeTokenName(name) {
+  const normalizedName = String(name ?? "").trim();
+  return normalizedName.length > 0 ? normalizedName.slice(0, 24) : null;
+}
+
 function isCellOccupied(cell, exceptTokenId) {
   return sceneTokens.some(
     (token) =>
@@ -334,6 +339,24 @@ function canControlToken(client, token) {
   return client.identity.type === "admin" || client.identity.id === token.id;
 }
 
+function syncClientIdentityForToken(token) {
+  let hasChanged = false;
+
+  for (const connectedClient of clients.values()) {
+    if (connectedClient.identity.type === "player" && connectedClient.identity.id === token.id) {
+      connectedClient.identity = {
+        ...connectedClient.identity,
+        name: token.name,
+      };
+      hasChanged = true;
+    }
+  }
+
+  if (hasChanged) {
+    broadcastStatus();
+  }
+}
+
 function handleSceneTokenMove(client, message) {
   const token = sceneTokens.find((candidate) => candidate.id === String(message.tokenId ?? ""));
   const cell = message.cell;
@@ -346,7 +369,32 @@ function handleSceneTokenMove(client, message) {
     x: cell.x,
     y: cell.y,
   };
+
+  const name = normalizeTokenName(message.name);
+  if (name && token.name !== name) {
+    token.name = name;
+    syncClientIdentityForToken(token);
+  }
+
   client.lastSeenAt = Date.now();
+  broadcastSceneSnapshot();
+}
+
+function handleSceneTokenUpdate(client, message) {
+  const incomingToken = message.token;
+  if (!incomingToken || typeof incomingToken !== "object") {
+    return;
+  }
+
+  const token = sceneTokens.find((candidate) => candidate.id === String(incomingToken.id ?? ""));
+  const name = normalizeTokenName(incomingToken.name);
+  if (!token || !name || !canControlToken(client, token)) {
+    return;
+  }
+
+  token.name = name;
+  client.lastSeenAt = Date.now();
+  syncClientIdentityForToken(token);
   broadcastSceneSnapshot();
 }
 
@@ -448,6 +496,11 @@ wss.on("connection", (socket) => {
 
     if (message.type === "scene:token-move") {
       handleSceneTokenMove(client, message);
+      return;
+    }
+
+    if (message.type === "scene:token-update") {
+      handleSceneTokenUpdate(client, message);
       return;
     }
 

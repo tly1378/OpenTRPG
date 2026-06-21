@@ -75,6 +75,10 @@ export class NetworkClient {
     this.openSocket();
   }
 
+  updateIdentity(identity: NetworkIdentity): void {
+    this.identity = identity;
+  }
+
   sendTokenAdded(token: SceneToken): void {
     this.send({
       type: "scene:token-add",
@@ -114,7 +118,15 @@ export class NetworkClient {
     this.send({
       type: "scene:token-move",
       tokenId: token.id,
+      name: token.name,
       cell: token.cell,
+    });
+  }
+
+  sendTokenUpdated(token: SceneToken): void {
+    this.send({
+      type: "scene:token-update",
+      token,
     });
   }
 

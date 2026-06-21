@@ -360,6 +360,10 @@ button {
   transform: translateX(0);
 }
 
+.selection-panel [hidden] {
+  display: none !important;
+}
+
 .panel-eyebrow {
   color: #7fbbe5;
   font-size: 12px;
@@ -378,6 +382,41 @@ button {
   margin-bottom: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.panel-field {
+  display: grid;
+  gap: 8px;
+  color: #93a4b8;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.panel-field input {
+  width: 100%;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 9px;
+  background: rgb(255 255 255 / 8%);
+  color: #edf4fb;
+  font: inherit;
+  padding: 10px 12px;
+}
+
+.panel-field input:focus {
+  border-color: rgb(104 191 255 / 70%);
+  outline: none;
+}
+
+.panel-field input:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.panel-help {
+  color: #93a4b8;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 10px 0 0;
 }
 
 .selection-actions {
