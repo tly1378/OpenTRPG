@@ -51,6 +51,7 @@ const modeSelect = mustQuery<HTMLSelectElement>("#mode-select");
 const uploadButton = mustQuery<HTMLLabelElement>("#upload-button");
 const uploadInput = mustQuery<HTMLInputElement>("#image-upload");
 const addTokenButton = mustQuery<HTMLButtonElement>("#add-token-button");
+const deleteTokenButton = mustQuery<HTMLButtonElement>("#delete-token-button");
 const wallModeButton = mustQuery<HTMLButtonElement>("#wall-mode-button");
 const clearWallsButton = mustQuery<HTMLButtonElement>("#clear-walls-button");
 const switchIdentityButton = mustQuery<HTMLButtonElement>("#switch-identity-button");
@@ -266,6 +267,8 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
   const { tokens } = snapshot;
   const previousTokens = new Map(sceneTokens.map((token) => [token.id, token]));
   const nextTokens = tokens.map((token) => ({ ...token, cell: { ...token.cell } }));
+  const shouldExitDeletedIdentity =
+    currentIdentity?.type === "player" && !nextTokens.some((token) => token.id === currentIdentity?.id);
   const startedAt = performance.now();
   const animations: MovingToken[] = [];
 
@@ -317,6 +320,10 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
   previewTokenPosition = null;
   renderIdentityList();
   updateSelectionPanel();
+
+  if (shouldExitDeletedIdentity) {
+    showIdentityScreen();
+  }
 }
 
 function nextAvailableTokenIndex(): number {
@@ -432,6 +439,8 @@ function setCursor(screenPoint: Vector2): void {
     canvas.style.cursor = "crosshair";
   } else if (isAdmin() && appMode === "logic" && logicTool === "add-token") {
     canvas.style.cursor = isCellOccupiedByToken(worldToCell(worldPoint), sceneTokens) ? "not-allowed" : "copy";
+  } else if (isAdmin() && appMode === "logic" && logicTool === "delete-token") {
+    canvas.style.cursor = tokenHit ? "pointer" : "default";
   } else if (isLoggedIn() && appMode === "play" && tokenHit && canControlToken(tokenHit)) {
     canvas.style.cursor = "grab";
   } else if (isAdmin() && appMode === "art" && hitTestImage(worldPoint)) {
@@ -533,6 +542,7 @@ function updateModeControls(): void {
       uploadInput,
       uploadButton,
       addTokenButton,
+      deleteTokenButton,
       wallModeButton,
       clearWallsButton,
       resetSizeButton,
@@ -563,6 +573,24 @@ function addTokenAtCell(cell: Cell): void {
   renderIdentityList();
   selectToken(token.id);
   networkClient.sendTokenAdded(token);
+}
+
+function deleteToken(tokenId: string): void {
+  const tokenIndex = sceneTokens.findIndex((token) => token.id === tokenId);
+  if (tokenIndex === -1) {
+    return;
+  }
+
+  sceneTokens.splice(tokenIndex, 1);
+  movingTokens = movingTokens.filter((animation) => animation.tokenId !== tokenId);
+  if (selectedTokenId === tokenId) {
+    selectedTokenId = null;
+  }
+  previewPath = [];
+  previewTokenPosition = null;
+  renderIdentityList();
+  updateSelectionPanel();
+  networkClient.sendTokenDeleted(tokenId);
 }
 
 function addImageElement(imageElement: HTMLImageElement, src: string, name: string, worldPoint: Vector2): void {
@@ -619,6 +647,12 @@ modeSelect.addEventListener("change", () => {
 addTokenButton.addEventListener("click", () => {
   if (isAdmin() && appMode === "logic") {
     setLogicTool("add-token");
+  }
+});
+
+deleteTokenButton.addEventListener("click", () => {
+  if (isAdmin() && appMode === "logic") {
+    setLogicTool("delete-token");
   }
 });
 
@@ -684,6 +718,14 @@ canvas.addEventListener("pointerdown", (event) => {
 
     if (logicTool === "add-token") {
       addTokenAtCell(worldToCell(worldPoint));
+      return;
+    }
+
+    if (logicTool === "delete-token") {
+      const tokenHit = hitTestToken(worldPoint);
+      if (tokenHit) {
+        deleteToken(tokenHit.id);
+      }
       return;
     }
 

@@ -257,6 +257,22 @@ function handleSceneTokenAdd(client, message) {
   broadcastSceneSnapshot();
 }
 
+function handleSceneTokenDelete(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  const tokenId = String(message.tokenId ?? "");
+  const tokenIndex = sceneTokens.findIndex((candidate) => candidate.id === tokenId);
+  if (tokenIndex === -1) {
+    return;
+  }
+
+  sceneTokens.splice(tokenIndex, 1);
+  client.lastSeenAt = Date.now();
+  broadcastSceneSnapshot();
+}
+
 function handleSceneImageAdd(client, message) {
   if (client.identity.type !== "admin") {
     return;
@@ -407,6 +423,11 @@ wss.on("connection", (socket) => {
 
     if (message.type === "scene:token-add") {
       handleSceneTokenAdd(client, message);
+      return;
+    }
+
+    if (message.type === "scene:token-delete") {
+      handleSceneTokenDelete(client, message);
       return;
     }
 

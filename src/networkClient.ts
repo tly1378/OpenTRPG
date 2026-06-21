@@ -82,6 +82,13 @@ export class NetworkClient {
     });
   }
 
+  sendTokenDeleted(tokenId: string): void {
+    this.send({
+      type: "scene:token-delete",
+      tokenId,
+    });
+  }
+
   sendImageAdded(image: SceneImageSnapshot): void {
     this.send({
       type: "scene:image-add",

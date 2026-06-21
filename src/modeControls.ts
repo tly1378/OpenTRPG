@@ -5,6 +5,7 @@ type ModeControls = {
   uploadInput: HTMLInputElement;
   uploadButton: HTMLLabelElement;
   addTokenButton: HTMLButtonElement;
+  deleteTokenButton: HTMLButtonElement;
   wallModeButton: HTMLButtonElement;
   clearWallsButton: HTMLButtonElement;
   resetSizeButton: HTMLButtonElement;
@@ -34,6 +35,8 @@ export function updateModeControls(
   controls.uploadButton.classList.toggle("is-hidden", !isLoggedIn || appMode !== "art" || !isAdmin);
   controls.addTokenButton.disabled = !isLoggedIn || appMode !== "logic" || !isAdmin;
   controls.addTokenButton.classList.toggle("is-hidden", !isLoggedIn || appMode !== "logic" || !isAdmin);
+  controls.deleteTokenButton.disabled = !isLoggedIn || appMode !== "logic" || !isAdmin;
+  controls.deleteTokenButton.classList.toggle("is-hidden", !isLoggedIn || appMode !== "logic" || !isAdmin);
   controls.wallModeButton.disabled = !isLoggedIn || appMode !== "logic" || !isAdmin;
   controls.wallModeButton.classList.toggle("is-hidden", !isLoggedIn || appMode !== "logic" || !isAdmin);
   controls.clearWallsButton.disabled = !isLoggedIn || appMode !== "logic" || !isAdmin;
@@ -45,8 +48,10 @@ export function updateModeControls(
   controls.layerBottomButton.disabled = !isLoggedIn || appMode !== "art" || !isAdmin;
 
   controls.addTokenButton.classList.toggle("is-active", isAdmin && appMode === "logic" && logicTool === "add-token");
+  controls.deleteTokenButton.classList.toggle("is-active", isAdmin && appMode === "logic" && logicTool === "delete-token");
   controls.wallModeButton.classList.toggle("is-active", isAdmin && appMode === "logic" && logicTool === "wall");
   controls.addTokenButton.setAttribute("aria-pressed", String(isAdmin && appMode === "logic" && logicTool === "add-token"));
+  controls.deleteTokenButton.setAttribute("aria-pressed", String(isAdmin && appMode === "logic" && logicTool === "delete-token"));
   controls.wallModeButton.setAttribute("aria-pressed", String(isAdmin && appMode === "logic" && logicTool === "wall"));
   controls.canvas.classList.toggle("is-wall-mode", isAdmin && appMode === "logic" && logicTool === "wall");
   controls.canvas.classList.toggle("is-art-mode", isLoggedIn && appMode === "art");
