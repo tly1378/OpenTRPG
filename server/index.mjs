@@ -4,6 +4,7 @@ import { WebSocketServer } from "ws";
 
 const port = Number.parseInt(process.env.PORT ?? "8787", 10);
 const pingIntervalMs = 2500;
+const avatarOffsetLimit = 10;
 
 const clients = new Map();
 const sceneImages = [];
@@ -169,6 +170,24 @@ function upsertSceneImage(image) {
   }
 }
 
+function clampNumber(value, min, max, fallback) {
+  return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+}
+
+function normalizeTokenAvatarFields(token) {
+  const avatarSrc = typeof token.avatarSrc === "string" && token.avatarSrc.startsWith("data:image/") ? token.avatarSrc : null;
+  if (!avatarSrc) {
+    return {};
+  }
+
+  return {
+    avatarSrc,
+    avatarScale: clampNumber(token.avatarScale, 1, 3, 1),
+    avatarOffsetX: clampNumber(token.avatarOffsetX, -avatarOffsetLimit, avatarOffsetLimit, 0),
+    avatarOffsetY: clampNumber(token.avatarOffsetY, -avatarOffsetLimit, avatarOffsetLimit, 0),
+  };
+}
+
 function normalizeSceneToken(token) {
   if (!token || typeof token !== "object" || !isFiniteCell(token.cell)) {
     return null;
@@ -190,6 +209,7 @@ function normalizeSceneToken(token) {
       x: token.cell.x,
       y: token.cell.y,
     },
+    ...normalizeTokenAvatarFields(token),
   };
 }
 
@@ -375,6 +395,7 @@ function handleSceneTokenMove(client, message) {
     token.name = name;
     syncClientIdentityForToken(token);
   }
+  Object.assign(token, normalizeTokenAvatarFields(message));
 
   client.lastSeenAt = Date.now();
   broadcastSceneSnapshot();
@@ -393,6 +414,7 @@ function handleSceneTokenUpdate(client, message) {
   }
 
   token.name = name;
+  Object.assign(token, normalizeTokenAvatarFields(incomingToken));
   client.lastSeenAt = Date.now();
   syncClientIdentityForToken(token);
   broadcastSceneSnapshot();

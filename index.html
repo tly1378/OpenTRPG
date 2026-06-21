@@ -69,9 +69,36 @@
             <span>角色姓名</span>
             <input id="token-name-input" type="text" maxlength="24" autocomplete="off" />
           </label>
+          <div class="panel-section">
+            <div class="panel-section-title">角色头像</div>
+            <label id="avatar-upload-button" class="primary-panel-action avatar-upload-button">
+              上传头像
+              <input id="avatar-upload-input" type="file" accept="image/*" />
+            </label>
+            <div id="avatar-adjust-controls" class="avatar-adjust-controls" hidden>
+              <button id="edit-avatar" type="button">编辑头像裁剪</button>
+              <button id="reset-avatar-adjustment" type="button">重置头像位置</button>
+            </div>
+          </div>
           <p id="token-panel-help" class="panel-help">修改后会同步到所有客户端。</p>
         </form>
       </aside>
+
+      <section id="avatar-editor-overlay" class="avatar-editor-overlay" hidden aria-label="头像裁剪编辑器">
+        <div class="avatar-editor-card">
+          <p class="panel-eyebrow">头像裁剪</p>
+          <h2>调整角色头像</h2>
+          <p class="avatar-editor-help">拖动图片调整位置，滚轮缩放。圆圈外区域不会出现在棋子头像中。</p>
+          <div id="avatar-editor-stage" class="avatar-editor-stage">
+            <img id="avatar-editor-image" alt="待裁剪头像" draggable="false" />
+            <div class="avatar-editor-mask" aria-hidden="true"></div>
+          </div>
+          <div class="avatar-editor-actions">
+            <button id="cancel-avatar-edit" type="button">取消</button>
+            <button id="save-avatar-edit" type="button">保存头像</button>
+          </div>
+        </div>
+      </section>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

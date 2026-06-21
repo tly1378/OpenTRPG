@@ -18,7 +18,7 @@ import {
   getResizeCursor,
   getResizeHandlePositions,
 } from "./imageTransform";
-import { defaultImageDropPoint, hasDraggedImage, loadImageFiles, loadImageSource } from "./imageImport";
+import { defaultImageDropPoint, hasDraggedImage, loadImageFile, loadImageFiles, loadImageSource } from "./imageImport";
 import {
   hitTestImage as findHitImage,
   hitTestResizeHandle as findHitResizeHandle,
@@ -83,7 +83,17 @@ const tokenNameValue = mustQuery<HTMLSpanElement>("#token-name-value");
 const editTokenNameButton = mustQuery<HTMLButtonElement>("#edit-token-name");
 const tokenNameField = mustQuery<HTMLLabelElement>("#token-name-field");
 const tokenNameInput = mustQuery<HTMLInputElement>("#token-name-input");
+const avatarUploadButton = mustQuery<HTMLLabelElement>("#avatar-upload-button");
+const avatarUploadInput = mustQuery<HTMLInputElement>("#avatar-upload-input");
+const avatarAdjustControls = mustQuery<HTMLDivElement>("#avatar-adjust-controls");
+const editAvatarButton = mustQuery<HTMLButtonElement>("#edit-avatar");
+const resetAvatarAdjustmentButton = mustQuery<HTMLButtonElement>("#reset-avatar-adjustment");
 const tokenPanelHelp = mustQuery<HTMLParagraphElement>("#token-panel-help");
+const avatarEditorOverlay = mustQuery<HTMLElement>("#avatar-editor-overlay");
+const avatarEditorStage = mustQuery<HTMLDivElement>("#avatar-editor-stage");
+const avatarEditorImage = mustQuery<HTMLImageElement>("#avatar-editor-image");
+const cancelAvatarEditButton = mustQuery<HTMLButtonElement>("#cancel-avatar-edit");
+const saveAvatarEditButton = mustQuery<HTMLButtonElement>("#save-avatar-edit");
 
 const ctx = mustGetCanvasContext(canvas);
 const latencyPanel = document.createElement("aside");
@@ -106,6 +116,7 @@ const pointer = {
 
 const sceneImages: SceneImage[] = [];
 const sceneTokens: SceneToken[] = [];
+const tokenAvatarImages = new Map<string, { src: string; image: HTMLImageElement }>();
 const blockedVerticalEdges = new Set<string>();
 const blockedHorizontalEdges = new Set<string>();
 
@@ -126,6 +137,24 @@ let previewPath: Cell[] = [];
 let imageSnapshotVersion = 0;
 let tokenNameEditing = false;
 const pendingTokenNames = new Map<string, string>();
+let avatarEditor:
+  | {
+      tokenId: string;
+      src: string;
+      image: HTMLImageElement;
+      scale: number;
+      offsetX: number;
+      offsetY: number;
+      drag:
+        | {
+            pointerId: number;
+            startPointer: Vector2;
+            startOffsetX: number;
+            startOffsetY: number;
+          }
+        | null;
+    }
+  | null = null;
 let latestNetworkSnapshot: NetworkSnapshot = {
   status: "offline",
   clients: [],
@@ -217,6 +246,33 @@ function sceneImageSnapshot(image: SceneImage): SceneImageSnapshot {
 
 function sceneImageSnapshots(): SceneImageSnapshot[] {
   return sceneImages.map(sceneImageSnapshot);
+}
+
+function syncTokenAvatarImages(): void {
+  const activeTokenIds = new Set(sceneTokens.map((token) => token.id));
+  for (const tokenId of tokenAvatarImages.keys()) {
+    const token = sceneTokens.find((candidate) => candidate.id === tokenId);
+    if (!activeTokenIds.has(tokenId) || !token?.avatarSrc) {
+      tokenAvatarImages.delete(tokenId);
+    }
+  }
+
+  for (const token of sceneTokens) {
+    const avatarSrc = token.avatarSrc;
+    if (!avatarSrc || tokenAvatarImages.get(token.id)?.src === avatarSrc) {
+      continue;
+    }
+
+    void loadImageSource(avatarSrc, `${token.name} 头像`)
+      .then((image) => {
+        if (sceneTokens.some((candidate) => candidate.id === token.id && candidate.avatarSrc === avatarSrc)) {
+          tokenAvatarImages.set(token.id, { src: avatarSrc, image });
+        }
+      })
+      .catch((error: unknown) => {
+        console.error(error);
+      });
+  }
 }
 
 function updateNextZFromImages(): void {
@@ -361,6 +417,7 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
   }
 
   sceneTokens.splice(0, sceneTokens.length, ...nextTokens);
+  syncTokenAvatarImages();
   blockedVerticalEdges.clear();
   blockedHorizontalEdges.clear();
   for (const edge of snapshot.blockedVerticalEdges) {
@@ -457,6 +514,7 @@ function render(): void {
     {
       images: sceneImages,
       tokens: sceneTokens,
+      tokenAvatarImages: new Map([...tokenAvatarImages].map(([tokenId, avatar]) => [tokenId, avatar.image])),
       blockedVerticalEdges,
       blockedHorizontalEdges,
       previewPath,
@@ -590,6 +648,11 @@ function updateSelectionPanel(): void {
     editTokenNameButton.disabled = !canEditToken;
     tokenNameField.hidden = !isEditingTokenName;
     tokenNameInput.disabled = !canEditToken;
+    avatarUploadInput.disabled = !canEditToken;
+    avatarUploadButton.classList.toggle("is-disabled", !canEditToken);
+    avatarAdjustControls.hidden = !selectedToken.avatarSrc;
+    editAvatarButton.disabled = !canEditToken;
+    resetAvatarAdjustmentButton.disabled = !canEditToken;
     tokenPanelHelp.textContent = canEditToken ? "修改后会同步到所有客户端。" : "只有主持人或该角色玩家可以修改姓名。";
 
     if (document.activeElement !== tokenNameInput || !isEditingTokenName) {
@@ -829,6 +892,153 @@ function stopTokenNameEditing(): void {
   updateSelectedTokenName(tokenNameInput.value);
   tokenNameEditing = false;
   updateSelectionPanel();
+}
+
+function updateTokenAvatar(token: SceneToken): void {
+  updateSelectionPanel();
+  networkClient.sendTokenUpdated(token);
+}
+
+async function uploadSelectedTokenAvatar(file: File): Promise<void> {
+  const token = getInspectedToken();
+  if (!token || !canControlToken(token)) {
+    return;
+  }
+
+  const loadedAvatar = await loadImageFile(file);
+  if (!loadedAvatar) {
+    return;
+  }
+
+  openAvatarEditor(token, loadedAvatar.src, loadedAvatar.image, {
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0,
+  });
+}
+
+async function editSelectedTokenAvatar(): Promise<void> {
+  const token = getInspectedToken();
+  if (!token || !canControlToken(token) || !token.avatarSrc) {
+    return;
+  }
+
+  const cachedAvatar = tokenAvatarImages.get(token.id);
+  const image =
+    cachedAvatar?.src === token.avatarSrc ? cachedAvatar.image : await loadImageSource(token.avatarSrc, `${token.name} 头像`);
+
+  openAvatarEditor(token, token.avatarSrc, image, {
+    scale: token.avatarScale ?? 1,
+    offsetX: token.avatarOffsetX ?? 0,
+    offsetY: token.avatarOffsetY ?? 0,
+  });
+}
+
+function resetSelectedTokenAvatarAdjustment(): void {
+  const token = getInspectedToken();
+  if (!token || !canControlToken(token) || !token.avatarSrc) {
+    return;
+  }
+
+  token.avatarScale = 1;
+  token.avatarOffsetX = 0;
+  token.avatarOffsetY = 0;
+  updateTokenAvatar(token);
+}
+
+function avatarEditorMaskSize(): number {
+  return avatarEditorStage.clientWidth * 0.72;
+}
+
+function clampAvatarEditorTransform(
+  editor: Pick<NonNullable<typeof avatarEditor>, "image">,
+  transform: { scale: number; offsetX: number; offsetY: number },
+): { scale: number; offsetX: number; offsetY: number } {
+  const maskSize = avatarEditorMaskSize();
+  const maskRadius = maskSize / 2;
+  const ratio = editor.image.naturalWidth / editor.image.naturalHeight || 1;
+  const scale = Math.min(3, Math.max(1, transform.scale));
+  const imageWidth = ratio >= 1 ? maskSize * scale * ratio : maskSize * scale;
+  const imageHeight = ratio >= 1 ? maskSize * scale : (maskSize * scale) / ratio;
+  const maxOffsetX = Math.max(0, (imageWidth - maskSize) / 2) / maskRadius;
+  const maxOffsetY = Math.max(0, (imageHeight - maskSize) / 2) / maskRadius;
+
+  return {
+    scale,
+    offsetX: Math.min(maxOffsetX, Math.max(-maxOffsetX, transform.offsetX)),
+    offsetY: Math.min(maxOffsetY, Math.max(-maxOffsetY, transform.offsetY)),
+  };
+}
+
+function renderAvatarEditor(): void {
+  if (!avatarEditor) {
+    avatarEditorOverlay.hidden = true;
+    return;
+  }
+
+  avatarEditorOverlay.hidden = false;
+  const nextTransform = clampAvatarEditorTransform(avatarEditor, avatarEditor);
+  avatarEditor.scale = nextTransform.scale;
+  avatarEditor.offsetX = nextTransform.offsetX;
+  avatarEditor.offsetY = nextTransform.offsetY;
+
+  const maskSize = avatarEditorMaskSize();
+  const maskRadius = maskSize / 2;
+  const ratio = avatarEditor.image.naturalWidth / avatarEditor.image.naturalHeight || 1;
+  const width = ratio >= 1 ? maskSize * avatarEditor.scale * ratio : maskSize * avatarEditor.scale;
+  const height = ratio >= 1 ? maskSize * avatarEditor.scale : (maskSize * avatarEditor.scale) / ratio;
+
+  avatarEditorImage.src = avatarEditor.src;
+  avatarEditorImage.style.width = `${width}px`;
+  avatarEditorImage.style.height = `${height}px`;
+  avatarEditorImage.style.left = `${avatarEditorStage.clientWidth / 2 + avatarEditor.offsetX * maskRadius}px`;
+  avatarEditorImage.style.top = `${avatarEditorStage.clientHeight / 2 + avatarEditor.offsetY * maskRadius}px`;
+  avatarEditorImage.style.transform = "translate(-50%, -50%)";
+}
+
+function openAvatarEditor(
+  token: SceneToken,
+  src: string,
+  image: HTMLImageElement,
+  transform: { scale: number; offsetX: number; offsetY: number },
+): void {
+  avatarEditor = {
+    tokenId: token.id,
+    src,
+    image,
+    scale: transform.scale,
+    offsetX: transform.offsetX,
+    offsetY: transform.offsetY,
+    drag: null,
+  };
+  renderAvatarEditor();
+}
+
+function closeAvatarEditor(): void {
+  avatarEditor = null;
+  avatarEditorStage.classList.remove("is-dragging");
+  avatarEditorOverlay.hidden = true;
+}
+
+function saveAvatarEditor(): void {
+  if (!avatarEditor) {
+    return;
+  }
+
+  const token = sceneTokens.find((candidate) => candidate.id === avatarEditor?.tokenId);
+  if (!token || !canControlToken(token)) {
+    closeAvatarEditor();
+    return;
+  }
+
+  const transform = clampAvatarEditorTransform(avatarEditor, avatarEditor);
+  token.avatarSrc = avatarEditor.src;
+  token.avatarScale = transform.scale;
+  token.avatarOffsetX = transform.offsetX;
+  token.avatarOffsetY = transform.offsetY;
+  tokenAvatarImages.set(token.id, { src: avatarEditor.src, image: avatarEditor.image });
+  updateTokenAvatar(token);
+  closeAvatarEditor();
 }
 
 modeSelect.addEventListener("change", () => {
@@ -1221,12 +1431,100 @@ tokenSelectionForm.addEventListener("submit", (event) => {
   updateSelectedTokenName(tokenNameInput.value);
   stopTokenNameEditing();
 });
+avatarUploadInput.addEventListener("change", () => {
+  const file = avatarUploadInput.files?.[0];
+  if (file) {
+    void uploadSelectedTokenAvatar(file).catch((error: unknown) => {
+      console.error(error);
+    });
+  }
+
+  avatarUploadInput.value = "";
+});
+editAvatarButton.addEventListener("click", () => {
+  void editSelectedTokenAvatar().catch((error: unknown) => {
+    console.error(error);
+  });
+});
+resetAvatarAdjustmentButton.addEventListener("click", resetSelectedTokenAvatarAdjustment);
+avatarEditorStage.addEventListener("pointerdown", (event) => {
+  if (!avatarEditor || event.button !== 0) {
+    return;
+  }
+
+  event.preventDefault();
+  avatarEditor.drag = {
+    pointerId: event.pointerId,
+    startPointer: { x: event.clientX, y: event.clientY },
+    startOffsetX: avatarEditor.offsetX,
+    startOffsetY: avatarEditor.offsetY,
+  };
+  avatarEditorStage.classList.add("is-dragging");
+  avatarEditorStage.setPointerCapture(event.pointerId);
+});
+avatarEditorStage.addEventListener("pointermove", (event) => {
+  if (!avatarEditor?.drag || avatarEditor.drag.pointerId !== event.pointerId) {
+    return;
+  }
+
+  const maskRadius = avatarEditorMaskSize() / 2;
+  const nextTransform = clampAvatarEditorTransform(avatarEditor, {
+    scale: avatarEditor.scale,
+    offsetX: avatarEditor.drag.startOffsetX + (event.clientX - avatarEditor.drag.startPointer.x) / maskRadius,
+    offsetY: avatarEditor.drag.startOffsetY + (event.clientY - avatarEditor.drag.startPointer.y) / maskRadius,
+  });
+
+  avatarEditor.scale = nextTransform.scale;
+  avatarEditor.offsetX = nextTransform.offsetX;
+  avatarEditor.offsetY = nextTransform.offsetY;
+  renderAvatarEditor();
+});
+avatarEditorStage.addEventListener("pointerup", (event) => {
+  if (avatarEditor?.drag?.pointerId === event.pointerId) {
+    avatarEditor.drag = null;
+    avatarEditorStage.classList.remove("is-dragging");
+    avatarEditorStage.releasePointerCapture(event.pointerId);
+  }
+});
+avatarEditorStage.addEventListener("pointercancel", (event) => {
+  if (avatarEditor?.drag?.pointerId === event.pointerId) {
+    avatarEditor.drag = null;
+    avatarEditorStage.classList.remove("is-dragging");
+  }
+});
+avatarEditorStage.addEventListener(
+  "wheel",
+  (event) => {
+    if (!avatarEditor) {
+      return;
+    }
+
+    event.preventDefault();
+    const zoomFactor = Math.exp(-event.deltaY * 0.001);
+    const nextTransform = clampAvatarEditorTransform(avatarEditor, {
+      scale: avatarEditor.scale * zoomFactor,
+      offsetX: avatarEditor.offsetX,
+      offsetY: avatarEditor.offsetY,
+    });
+
+    avatarEditor.scale = nextTransform.scale;
+    avatarEditor.offsetX = nextTransform.offsetX;
+    avatarEditor.offsetY = nextTransform.offsetY;
+    renderAvatarEditor();
+  },
+  { passive: false },
+);
+cancelAvatarEditButton.addEventListener("click", closeAvatarEditor);
+saveAvatarEditButton.addEventListener("click", saveAvatarEditor);
 
 switchIdentityButton.addEventListener("click", () => {
   showIdentityScreen();
 });
 
-window.addEventListener("resize", resizeCanvas);
+window.addEventListener("resize", () => {
+  resizeCanvas();
+  renderAvatarEditor();
+});
 
 renderIdentityList();
 showIdentityScreen();

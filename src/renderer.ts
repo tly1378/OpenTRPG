@@ -14,6 +14,7 @@ type Viewport = {
 export type RenderState = {
   images: SceneImage[];
   tokens: SceneToken[];
+  tokenAvatarImages: Map<string, HTMLImageElement>;
   blockedVerticalEdges: Set<string>;
   blockedHorizontalEdges: Set<string>;
   previewPath: Cell[];
@@ -171,23 +172,58 @@ function drawTokens(ctx: CanvasRenderingContext2D, viewport: Viewport, state: Re
     const screenPoint = viewport.worldToScreen(worldPoint);
     const radius = TOKEN_RADIUS * viewport.camera.zoom;
     const isSelected = token.id === state.selectedTokenId;
+    const avatarImage = state.tokenAvatarImages.get(token.id) ?? null;
 
     ctx.save();
-    ctx.fillStyle = token.color;
-    ctx.strokeStyle = isSelected ? "#ffffff" : "rgb(255 255 255 / 0.7)";
-    ctx.lineWidth = isSelected ? 4 : 2;
     ctx.beginPath();
     ctx.arc(screenPoint.x, screenPoint.y, radius, 0, Math.PI * 2);
-    ctx.fill();
+    if (avatarImage) {
+      drawTokenAvatar(ctx, avatarImage, token, screenPoint, radius);
+    } else {
+      ctx.fillStyle = token.color;
+      ctx.fill();
+    }
+
+    ctx.strokeStyle = isSelected ? "#ffffff" : "rgb(255 255 255 / 0.76)";
+    ctx.lineWidth = isSelected ? 4 : 2;
     ctx.stroke();
 
-    ctx.fillStyle = "#0f172a";
-    ctx.font = `${Math.max(12, 14 * viewport.camera.zoom)}px ui-sans-serif, system-ui, sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(token.name, screenPoint.x, screenPoint.y);
+    if (!avatarImage) {
+      ctx.fillStyle = "#0f172a";
+      ctx.font = `${Math.max(12, 14 * viewport.camera.zoom)}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(token.name, screenPoint.x, screenPoint.y);
+    }
     ctx.restore();
   }
+}
+
+function drawTokenAvatar(
+  ctx: CanvasRenderingContext2D,
+  avatarImage: HTMLImageElement,
+  token: SceneToken,
+  screenPoint: Vector2,
+  radius: number,
+): void {
+  const diameter = radius * 2;
+  const scale = token.avatarScale ?? 1;
+  const offsetX = (token.avatarOffsetX ?? 0) * radius;
+  const offsetY = (token.avatarOffsetY ?? 0) * radius;
+  const ratio = avatarImage.naturalWidth / avatarImage.naturalHeight || 1;
+  const width = ratio >= 1 ? diameter * scale * ratio : diameter * scale;
+  const height = ratio >= 1 ? diameter * scale : (diameter * scale) / ratio;
+
+  ctx.save();
+  ctx.clip();
+  ctx.drawImage(
+    avatarImage,
+    screenPoint.x - width / 2 + offsetX,
+    screenPoint.y - height / 2 + offsetY,
+    width,
+    height,
+  );
+  ctx.restore();
 }
 
 function interpolateMovingToken(animation: MovingToken): Vector2 {

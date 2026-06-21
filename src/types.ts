@@ -53,6 +53,10 @@ export type SceneToken = {
   name: string;
   cell: Cell;
   color: string;
+  avatarSrc?: string;
+  avatarScale?: number;
+  avatarOffsetX?: number;
+  avatarOffsetY?: number;
 };
 
 export type MovingToken = {

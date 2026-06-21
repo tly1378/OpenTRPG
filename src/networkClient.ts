@@ -119,6 +119,10 @@ export class NetworkClient {
       type: "scene:token-move",
       tokenId: token.id,
       name: token.name,
+      avatarSrc: token.avatarSrc,
+      avatarScale: token.avatarScale,
+      avatarOffsetX: token.avatarOffsetX,
+      avatarOffsetY: token.avatarOffsetY,
       cell: token.cell,
     });
   }
