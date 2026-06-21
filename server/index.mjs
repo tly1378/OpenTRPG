@@ -6,6 +6,7 @@ const port = Number.parseInt(process.env.PORT ?? "8787", 10);
 const pingIntervalMs = 2500;
 
 const clients = new Map();
+const sceneTokens = [];
 
 const server = createServer((request, response) => {
   if (request.url === "/health") {
@@ -49,6 +50,60 @@ function broadcastStatus() {
   }
 }
 
+function broadcastSceneTokens() {
+  const payload = {
+    type: "scene:snapshot",
+    tokens: sceneTokens,
+    serverTime: Date.now(),
+  };
+
+  for (const client of clients.values()) {
+    sendJson(client.socket, payload);
+  }
+}
+
+function isFiniteCell(cell) {
+  return (
+    cell &&
+    typeof cell === "object" &&
+    Number.isFinite(cell.x) &&
+    Number.isFinite(cell.y)
+  );
+}
+
+function normalizeSceneToken(token) {
+  if (!token || typeof token !== "object" || !isFiniteCell(token.cell)) {
+    return null;
+  }
+
+  const id = String(token.id ?? "");
+  const name = String(token.name ?? "");
+  const color = String(token.color ?? "");
+
+  if (!id || !name || !color) {
+    return null;
+  }
+
+  return {
+    id,
+    name,
+    color,
+    cell: {
+      x: token.cell.x,
+      y: token.cell.y,
+    },
+  };
+}
+
+function isCellOccupied(cell, exceptTokenId) {
+  return sceneTokens.some(
+    (token) =>
+      token.id !== exceptTokenId &&
+      token.cell.x === cell.x &&
+      token.cell.y === cell.y,
+  );
+}
+
 function handleHello(client, message) {
   if (!message.identity || typeof message.identity !== "object") {
     return;
@@ -57,7 +112,12 @@ function handleHello(client, message) {
   client.identity = {
     id: String(message.identity.id ?? client.clientId),
     name: String(message.identity.name ?? "未知用户"),
-    type: message.identity.type === "admin" ? "admin" : "player",
+    type:
+      message.identity.type === "admin"
+        ? "admin"
+        : message.identity.type === "lobby"
+          ? "lobby"
+          : "player",
   };
   client.lastSeenAt = Date.now();
   sendJson(client.socket, {
@@ -66,6 +126,11 @@ function handleHello(client, message) {
     serverTime: client.lastSeenAt,
   });
   broadcastStatus();
+  sendJson(client.socket, {
+    type: "scene:snapshot",
+    tokens: sceneTokens,
+    serverTime: client.lastSeenAt,
+  });
 }
 
 function handlePong(client, message) {
@@ -76,6 +141,26 @@ function handlePong(client, message) {
   client.latencyMs = Math.max(0, Date.now() - message.sentAt);
   client.lastSeenAt = Date.now();
   broadcastStatus();
+}
+
+function handleSceneTokenAdd(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  const token = normalizeSceneToken(message.token);
+  if (!token || isCellOccupied(token.cell, token.id)) {
+    return;
+  }
+
+  const existingTokenIndex = sceneTokens.findIndex((candidate) => candidate.id === token.id);
+  if (existingTokenIndex === -1) {
+    sceneTokens.push(token);
+  } else {
+    sceneTokens[existingTokenIndex] = token;
+  }
+
+  broadcastSceneTokens();
 }
 
 wss.on("connection", (socket) => {
@@ -96,6 +181,7 @@ wss.on("connection", (socket) => {
 
   clients.set(clientId, client);
   sendJson(socket, { type: "ready", clientId, serverTime: now });
+  sendJson(socket, { type: "scene:snapshot", tokens: sceneTokens, serverTime: now });
   broadcastStatus();
 
   socket.on("message", (data) => {
@@ -113,6 +199,11 @@ wss.on("connection", (socket) => {
 
     if (message.type === "pong") {
       handlePong(client, message);
+      return;
+    }
+
+    if (message.type === "scene:token-add") {
+      handleSceneTokenAdd(client, message);
     }
   });
 

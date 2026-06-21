@@ -26,7 +26,7 @@ export function hitTestToken(
   worldPoint: Vector2,
   state: {
     interaction: Interaction | null;
-    movingToken: MovingToken | null;
+    movingTokens: MovingToken[];
     previewTokenPosition: Vector2 | null;
   },
   zoom: number,

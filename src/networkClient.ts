@@ -1,16 +1,8 @@
+import type { Identity, SceneToken } from "./types";
+
 export type ConnectionStatus = "offline" | "connecting" | "online";
 
-export type NetworkIdentity =
-  | {
-      type: "admin";
-      id: "host";
-      name: "主持人";
-    }
-  | {
-      type: "player";
-      id: string;
-      name: string;
-    };
+export type NetworkIdentity = Identity | { type: "lobby"; id: "lobby"; name: "身份选择中" };
 
 export type RemoteClient = {
   clientId: string;
@@ -40,11 +32,18 @@ type NetworkMessage =
       type: "clients";
       clients: RemoteClient[];
       serverTime: number;
+    }
+  | {
+      type: "scene:snapshot";
+      tokens: SceneToken[];
+      serverTime: number;
     };
 
 const serverUrl =
   import.meta.env.VITE_TRPG_SERVER_URL ??
   `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:8787`;
+
+const LOBBY_IDENTITY: NetworkIdentity = { type: "lobby", id: "lobby", name: "身份选择中" };
 
 export class NetworkClient {
   private socket: WebSocket | null = null;
@@ -54,13 +53,23 @@ export class NetworkClient {
   private clients: RemoteClient[] = [];
   private error: string | null = null;
 
-  constructor(private readonly onChange: (snapshot: NetworkSnapshot) => void) {}
+  constructor(
+    private readonly onChange: (snapshot: NetworkSnapshot) => void,
+    private readonly onSceneTokensChange: (tokens: SceneToken[]) => void,
+  ) {}
 
-  connect(identity: NetworkIdentity): void {
-    this.identity = identity;
+  connect(identity: NetworkIdentity | null = null): void {
+    this.identity = identity ?? LOBBY_IDENTITY;
     this.clients = [];
     this.clearReconnectTimer();
     this.openSocket();
+  }
+
+  sendTokenAdded(token: SceneToken): void {
+    this.send({
+      type: "scene:token-add",
+      token,
+    });
   }
 
   disconnect(): void {
@@ -78,10 +87,11 @@ export class NetworkClient {
     }
 
     this.socket?.close();
-    this.socket = new WebSocket(serverUrl);
+    const socket = new WebSocket(serverUrl);
+    this.socket = socket;
     this.setStatus("connecting");
 
-    this.socket.addEventListener("open", () => {
+    socket.addEventListener("open", () => {
       this.error = null;
       this.send({
         type: "hello",
@@ -90,18 +100,26 @@ export class NetworkClient {
       this.setStatus("online");
     });
 
-    this.socket.addEventListener("message", (event) => {
+    socket.addEventListener("message", (event) => {
       this.handleMessage(event.data);
     });
 
-    this.socket.addEventListener("close", () => {
+    socket.addEventListener("close", () => {
+      if (this.socket !== socket) {
+        return;
+      }
+
       this.socket = null;
       this.clients = [];
       this.setStatus(this.identity ? "connecting" : "offline");
       this.scheduleReconnect();
     });
 
-    this.socket.addEventListener("error", () => {
+    socket.addEventListener("error", () => {
+      if (this.socket !== socket) {
+        return;
+      }
+
       this.error = `无法连接 ${serverUrl}`;
       this.emitChange();
     });
@@ -130,6 +148,11 @@ export class NetworkClient {
     if (message.type === "clients") {
       this.clients = message.clients;
       this.emitChange();
+      return;
+    }
+
+    if (message.type === "scene:snapshot") {
+      this.onSceneTokensChange(message.tokens);
     }
   }
 

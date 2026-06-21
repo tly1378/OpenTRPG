@@ -20,7 +20,7 @@ export type RenderState = {
   selectedImage: SceneImage | null;
   selectedTokenId: string | null;
   interaction: Interaction | null;
-  movingToken: MovingToken | null;
+  movingTokens: MovingToken[];
   previewTokenPosition: Vector2 | null;
 };
 
@@ -47,13 +47,14 @@ export function renderScene(ctx: CanvasRenderingContext2D, viewport: Viewport, s
   }
 }
 
-export function tokenRenderPosition(token: SceneToken, state: Pick<RenderState, "interaction" | "movingToken" | "previewTokenPosition">): Vector2 {
+export function tokenRenderPosition(token: SceneToken, state: Pick<RenderState, "interaction" | "movingTokens" | "previewTokenPosition">): Vector2 {
   if (state.interaction?.type === "drag-token" && state.interaction.tokenId === token.id && state.previewTokenPosition) {
     return state.previewTokenPosition;
   }
 
-  if (state.movingToken?.tokenId === token.id) {
-    return interpolateMovingToken(state.movingToken);
+  const movingToken = state.movingTokens.find((animation) => animation.tokenId === token.id);
+  if (movingToken) {
+    return interpolateMovingToken(movingToken);
   }
 
   return cellCenter(token.cell);

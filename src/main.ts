@@ -94,7 +94,7 @@ let logicTool: LogicTool = "wall";
 let nextZ = 1;
 let nextTokenIndex = 1;
 let dragDepth = 0;
-let movingToken: MovingToken | null = null;
+let movingTokens: MovingToken[] = [];
 let previewTokenPosition: Vector2 | null = null;
 let previewPath: Cell[] = [];
 let latestNetworkSnapshot: NetworkSnapshot = {
@@ -103,10 +103,13 @@ let latestNetworkSnapshot: NetworkSnapshot = {
   error: null,
 };
 
-const networkClient = new NetworkClient((snapshot) => {
-  latestNetworkSnapshot = snapshot;
-  renderLatencyPanel();
-});
+const networkClient = new NetworkClient(
+  (snapshot) => {
+    latestNetworkSnapshot = snapshot;
+    renderLatencyPanel();
+  },
+  applySceneTokens,
+);
 
 function formatLatency(latencyMs: number | null): string {
   return latencyMs === null ? "等待中" : `${latencyMs} ms`;
@@ -153,7 +156,9 @@ function renderLatencyPanel(): void {
       const latency = document.createElement("span");
 
       row.className = "latency-client-row";
-      name.textContent = `${client.identity.name} · ${client.identity.type === "admin" ? "管理员" : "玩家"}`;
+      name.textContent = `${client.identity.name} · ${
+        client.identity.type === "admin" ? "管理员" : client.identity.type === "player" ? "玩家" : "选择身份中"
+      }`;
       latency.textContent = formatLatency(client.latencyMs);
       row.append(name, latency);
       list.append(row);
@@ -184,6 +189,10 @@ function canControlToken(token: SceneToken): boolean {
   return currentIdentity?.type === "admin" || currentIdentity?.id === token.id;
 }
 
+function isTokenAnimating(tokenId: string): boolean {
+  return movingTokens.some((animation) => animation.tokenId === tokenId);
+}
+
 function availableModes(): AppMode[] {
   return isAdmin() ? ["art", "logic", "play"] : ["play"];
 }
@@ -194,6 +203,31 @@ function rebuildModeOptions(): void {
 
 function renderIdentityList(): void {
   renderIdentityOptions(identityList, buildIdentities(sceneTokens), enterIdentity);
+}
+
+function applySceneTokens(tokens: SceneToken[]): void {
+  sceneTokens.splice(0, sceneTokens.length, ...tokens.map((token) => ({ ...token, cell: { ...token.cell } })));
+  nextTokenIndex = nextAvailableTokenIndex();
+
+  if (selectedTokenId && !sceneTokens.some((token) => token.id === selectedTokenId)) {
+    selectedTokenId = null;
+  }
+
+  movingTokens = movingTokens.filter((animation) => sceneTokens.some((token) => token.id === animation.tokenId));
+
+  previewPath = [];
+  previewTokenPosition = null;
+  renderIdentityList();
+  updateSelectionPanel();
+}
+
+function nextAvailableTokenIndex(): number {
+  const maxTokenIndex = sceneTokens.reduce((maxIndex, token) => {
+    const match = /^P(\d+)$/.exec(token.name);
+    return match ? Math.max(maxIndex, Number.parseInt(match[1], 10)) : maxIndex;
+  }, 0);
+
+  return maxTokenIndex + 1;
 }
 
 function enterIdentity(identity: Identity): void {
@@ -208,7 +242,7 @@ function enterIdentity(identity: Identity): void {
 
 function showIdentityScreen(): void {
   currentIdentity = null;
-  networkClient.disconnect();
+  networkClient.connect();
   selectedImageId = null;
   selectedTokenId = null;
   interaction = null;
@@ -245,7 +279,7 @@ function render(): void {
       selectedImage: getSelectedImage(),
       selectedTokenId,
       interaction,
-      movingToken,
+      movingTokens,
       previewTokenPosition,
     },
   );
@@ -259,22 +293,8 @@ function tick(): void {
 }
 
 function updateMovingTokenAnimation(): void {
-  if (!movingToken) {
-    return;
-  }
-
-  const progress = (performance.now() - movingToken.startedAt) / movingToken.duration;
-  if (progress < 1) {
-    return;
-  }
-
-  const token = sceneTokens.find((candidate) => candidate.id === movingToken?.tokenId);
-  const finalCell = movingToken.path[movingToken.path.length - 1];
-  if (token && finalCell) {
-    token.cell = finalCell;
-  }
-
-  movingToken = null;
+  const now = performance.now();
+  movingTokens = movingTokens.filter((animation) => (now - animation.startedAt) / animation.duration < 1);
 }
 
 function hitTestImage(worldPoint: Vector2): SceneImage | null {
@@ -282,7 +302,7 @@ function hitTestImage(worldPoint: Vector2): SceneImage | null {
 }
 
 function hitTestToken(worldPoint: Vector2): SceneToken | null {
-  return findHitToken(sceneTokens, worldPoint, { interaction, movingToken, previewTokenPosition }, camera.zoom);
+  return findHitToken(sceneTokens, worldPoint, { interaction, movingTokens, previewTokenPosition }, camera.zoom);
 }
 
 function hitTestResizeHandle(screenPoint: Vector2) {
@@ -444,6 +464,7 @@ function addTokenAtCell(cell: Cell): void {
   sceneTokens.push(token);
   renderIdentityList();
   selectToken(token.id);
+  networkClient.sendTokenAdded(token);
 }
 
 function addImageElement(imageElement: HTMLImageElement, name: string, worldPoint: Vector2): void {
@@ -594,7 +615,7 @@ canvas.addEventListener("pointerdown", (event) => {
     const tokenHit = appMode === "play" ? hitTestToken(worldPoint) : null;
     const imageHit = isAdmin() && appMode === "art" ? hitTestImage(worldPoint) : null;
 
-    if (tokenHit && canControlToken(tokenHit) && movingToken?.tokenId !== tokenHit.id) {
+    if (tokenHit && canControlToken(tokenHit) && !isTokenAnimating(tokenHit.id)) {
       const targetCell = worldToCell(worldPoint);
       const path = findGridPath(tokenHit.cell, targetCell, tokenHit.id, sceneTokens, blockedVerticalEdges, blockedHorizontalEdges);
       selectToken(tokenHit.id);
@@ -693,12 +714,15 @@ canvas.addEventListener("pointerup", (event) => {
     if (currentInteraction.type === "drag-token") {
       const token = sceneTokens.find((candidate) => candidate.id === currentInteraction.tokenId);
       if (token && currentInteraction.path.length > 1) {
-        movingToken = {
+        const finalCell = currentInteraction.path[currentInteraction.path.length - 1];
+        token.cell = { ...finalCell };
+        movingTokens = movingTokens.filter((animation) => animation.tokenId !== token.id);
+        movingTokens.push({
           tokenId: token.id,
-          path: currentInteraction.path,
+          path: currentInteraction.path.map((cell) => ({ ...cell })),
           startedAt: performance.now(),
           duration: Math.max(1, currentInteraction.path.length - 1) * TOKEN_STEP_ANIMATION_MS,
-        };
+        });
       }
 
       previewPath = [];
