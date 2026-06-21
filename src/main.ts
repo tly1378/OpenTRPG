@@ -107,6 +107,7 @@ const blockedHorizontalEdges = new Set<string>();
 
 let selectedImageId: string | null = null;
 let selectedTokenId: string | null = null;
+let inspectedTokenId: string | null = null;
 let currentIdentity: Identity | null = null;
 let interaction: Interaction | null = null;
 let appMode: AppMode = "play";
@@ -198,6 +199,10 @@ function getSelectedImage(): SceneImage | null {
 
 function getSelectedToken(): SceneToken | null {
   return sceneTokens.find((token) => token.id === selectedTokenId) ?? null;
+}
+
+function getInspectedToken(): SceneToken | null {
+  return sceneTokens.find((token) => token.id === inspectedTokenId) ?? null;
 }
 
 function sceneImageSnapshot(image: SceneImage): SceneImageSnapshot {
@@ -365,6 +370,10 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
     selectedTokenId = null;
   }
 
+  if (inspectedTokenId && !sceneTokens.some((token) => token.id === inspectedTokenId)) {
+    inspectedTokenId = null;
+  }
+
   if (currentIdentity?.type === "player") {
     const currentToken = sceneTokens.find((token) => token.id === currentIdentity?.id);
     if (currentToken && currentIdentity.name !== currentToken.name) {
@@ -413,6 +422,7 @@ function showIdentityScreen(): void {
   networkClient.connect();
   selectedImageId = null;
   selectedTokenId = null;
+  inspectedTokenId = null;
   interaction = null;
   previewPath = [];
   previewTokenPosition = null;
@@ -542,7 +552,7 @@ function updateRotateInteraction(event: PointerEvent, state: Extract<Interaction
 
 function updateSelectionPanel(): void {
   const selectedImage = getSelectedImage();
-  const selectedToken = canInspectToken() ? getSelectedToken() : null;
+  const selectedToken = canInspectToken() ? getInspectedToken() : null;
 
   if (!selectedImage && !selectedToken) {
     selectionPanel.classList.remove("is-open");
@@ -582,14 +592,18 @@ function selectImage(imageId: string | null): void {
   selectedImageId = imageId;
   if (imageId) {
     selectedTokenId = null;
+    inspectedTokenId = null;
   }
   updateSelectionPanel();
 }
 
-function selectToken(tokenId: string | null): void {
+function selectToken(tokenId: string | null, inspect = false): void {
   selectedTokenId = tokenId;
   if (tokenId) {
     selectedImageId = null;
+    inspectedTokenId = inspect ? tokenId : inspectedTokenId;
+  } else {
+    inspectedTokenId = null;
   }
   updateSelectionPanel();
 }
@@ -607,6 +621,7 @@ function setAppMode(nextMode: AppMode): void {
 
   if (!isPlayMode()) {
     selectedTokenId = null;
+    inspectedTokenId = null;
   }
 
   updateModeControls();
@@ -696,6 +711,9 @@ function deleteToken(tokenId: string): void {
   if (selectedTokenId === tokenId) {
     selectedTokenId = null;
   }
+  if (inspectedTokenId === tokenId) {
+    inspectedTokenId = null;
+  }
   previewPath = [];
   previewTokenPosition = null;
   renderIdentityList();
@@ -752,7 +770,7 @@ function sendTokenNameUpdate(token: SceneToken): void {
 }
 
 function updateSelectedTokenName(name: string): void {
-  const token = getSelectedToken();
+  const token = getInspectedToken();
   const normalizedName = name.trim();
   if (!token || !canControlToken(token) || normalizedName.length === 0 || token.name === normalizedName) {
     return;
@@ -834,6 +852,7 @@ canvas.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     selectedImageId = null;
     selectedTokenId = null;
+    inspectedTokenId = null;
     updateSelectionPanel();
     interaction = {
       type: "pan-camera",
@@ -857,6 +876,7 @@ canvas.addEventListener("pointerdown", (event) => {
   if (isEditingLogic()) {
     selectedImageId = null;
     selectedTokenId = null;
+    inspectedTokenId = null;
     updateSelectionPanel();
 
     if (logicTool === "add-token") {
@@ -932,6 +952,7 @@ canvas.addEventListener("pointerdown", (event) => {
     } else {
       selectedImageId = null;
       selectedTokenId = null;
+      inspectedTokenId = null;
       updateSelectionPanel();
     }
   }
@@ -1063,7 +1084,7 @@ canvas.addEventListener("dblclick", (event) => {
   }
 
   event.preventDefault();
-  selectToken(tokenHit.id);
+  selectToken(tokenHit.id, true);
 
   if (canControlToken(tokenHit)) {
     tokenNameInput.focus();
