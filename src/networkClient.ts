@@ -72,6 +72,14 @@ export class NetworkClient {
     });
   }
 
+  sendTokenMoved(token: SceneToken): void {
+    this.send({
+      type: "scene:token-move",
+      tokenId: token.id,
+      cell: token.cell,
+    });
+  }
+
   disconnect(): void {
     this.identity = null;
     this.clients = [];

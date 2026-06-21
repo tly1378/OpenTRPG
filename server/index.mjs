@@ -163,6 +163,26 @@ function handleSceneTokenAdd(client, message) {
   broadcastSceneTokens();
 }
 
+function canControlToken(client, token) {
+  return client.identity.type === "admin" || client.identity.id === token.id;
+}
+
+function handleSceneTokenMove(client, message) {
+  const token = sceneTokens.find((candidate) => candidate.id === String(message.tokenId ?? ""));
+  const cell = message.cell;
+
+  if (!token || !canControlToken(client, token) || !isFiniteCell(cell) || isCellOccupied(cell, token.id)) {
+    return;
+  }
+
+  token.cell = {
+    x: cell.x,
+    y: cell.y,
+  };
+  client.lastSeenAt = Date.now();
+  broadcastSceneTokens();
+}
+
 wss.on("connection", (socket) => {
   const clientId = randomUUID();
   const now = Date.now();
@@ -204,6 +224,11 @@ wss.on("connection", (socket) => {
 
     if (message.type === "scene:token-add") {
       handleSceneTokenAdd(client, message);
+      return;
+    }
+
+    if (message.type === "scene:token-move") {
+      handleSceneTokenMove(client, message);
     }
   });
 

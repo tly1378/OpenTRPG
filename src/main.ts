@@ -206,14 +206,46 @@ function renderIdentityList(): void {
 }
 
 function applySceneTokens(tokens: SceneToken[]): void {
-  sceneTokens.splice(0, sceneTokens.length, ...tokens.map((token) => ({ ...token, cell: { ...token.cell } })));
+  const previousTokens = new Map(sceneTokens.map((token) => [token.id, token]));
+  const nextTokens = tokens.map((token) => ({ ...token, cell: { ...token.cell } }));
+  const startedAt = performance.now();
+  const animations: MovingToken[] = [];
+
+  for (const token of nextTokens) {
+    const previousToken = previousTokens.get(token.id);
+    if (!previousToken || sameCell(previousToken.cell, token.cell) || isTokenAnimating(token.id)) {
+      continue;
+    }
+
+    const path = findGridPath(
+      previousToken.cell,
+      token.cell,
+      token.id,
+      sceneTokens,
+      blockedVerticalEdges,
+      blockedHorizontalEdges,
+    );
+    const animationPath = path.length > 1 ? path : [previousToken.cell, token.cell];
+
+    animations.push({
+      tokenId: token.id,
+      path: animationPath.map((cell) => ({ ...cell })),
+      startedAt,
+      duration: Math.max(1, animationPath.length - 1) * TOKEN_STEP_ANIMATION_MS,
+    });
+  }
+
+  sceneTokens.splice(0, sceneTokens.length, ...nextTokens);
   nextTokenIndex = nextAvailableTokenIndex();
 
   if (selectedTokenId && !sceneTokens.some((token) => token.id === selectedTokenId)) {
     selectedTokenId = null;
   }
 
-  movingTokens = movingTokens.filter((animation) => sceneTokens.some((token) => token.id === animation.tokenId));
+  movingTokens = [
+    ...movingTokens.filter((animation) => sceneTokens.some((token) => token.id === animation.tokenId)),
+    ...animations,
+  ];
 
   previewPath = [];
   previewTokenPosition = null;
@@ -723,6 +755,7 @@ canvas.addEventListener("pointerup", (event) => {
           startedAt: performance.now(),
           duration: Math.max(1, currentInteraction.path.length - 1) * TOKEN_STEP_ANIMATION_MS,
         });
+        networkClient.sendTokenMoved(token);
       }
 
       previewPath = [];
