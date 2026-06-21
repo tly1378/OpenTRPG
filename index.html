@@ -61,7 +61,11 @@
           <button id="layer-bottom" type="button">置底</button>
         </div>
         <form id="token-selection-form" class="token-selection-form" hidden>
-          <label class="panel-field">
+          <div id="token-name-display" class="token-name-display">
+            <span id="token-name-value" class="token-name-value">角色</span>
+            <button id="edit-token-name" class="icon-panel-action" type="button" aria-label="编辑角色姓名">✎</button>
+          </div>
+          <label id="token-name-field" class="panel-field" hidden>
             <span>角色姓名</span>
             <input id="token-name-input" type="text" maxlength="24" autocomplete="off" />
           </label>

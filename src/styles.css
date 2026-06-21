@@ -412,6 +412,51 @@ button {
   opacity: 0.58;
 }
 
+.token-name-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 7%);
+  padding: 10px 12px;
+}
+
+.token-name-value {
+  overflow: hidden;
+  color: #edf4fb;
+  font-size: 16px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-panel-action {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 8px;
+  background: rgb(104 191 255 / 14%);
+  color: #dbeafe;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.icon-panel-action:hover {
+  border-color: rgb(104 191 255 / 70%);
+  background: rgb(104 191 255 / 22%);
+}
+
+.icon-panel-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .panel-help {
   color: #93a4b8;
   font-size: 12px;

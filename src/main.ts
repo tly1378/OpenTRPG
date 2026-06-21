@@ -78,6 +78,10 @@ const layerDownButton = mustQuery<HTMLButtonElement>("#layer-down");
 const layerTopButton = mustQuery<HTMLButtonElement>("#layer-top");
 const layerBottomButton = mustQuery<HTMLButtonElement>("#layer-bottom");
 const tokenSelectionForm = mustQuery<HTMLFormElement>("#token-selection-form");
+const tokenNameDisplay = mustQuery<HTMLDivElement>("#token-name-display");
+const tokenNameValue = mustQuery<HTMLSpanElement>("#token-name-value");
+const editTokenNameButton = mustQuery<HTMLButtonElement>("#edit-token-name");
+const tokenNameField = mustQuery<HTMLLabelElement>("#token-name-field");
 const tokenNameInput = mustQuery<HTMLInputElement>("#token-name-input");
 const tokenPanelHelp = mustQuery<HTMLParagraphElement>("#token-panel-help");
 
@@ -120,6 +124,7 @@ let movingTokens: MovingToken[] = [];
 let previewTokenPosition: Vector2 | null = null;
 let previewPath: Cell[] = [];
 let imageSnapshotVersion = 0;
+let tokenNameEditing = false;
 const pendingTokenNames = new Map<string, string>();
 let latestNetworkSnapshot: NetworkSnapshot = {
   status: "offline",
@@ -372,6 +377,7 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
 
   if (inspectedTokenId && !sceneTokens.some((token) => token.id === inspectedTokenId)) {
     inspectedTokenId = null;
+    tokenNameEditing = false;
   }
 
   if (currentIdentity?.type === "player") {
@@ -557,10 +563,12 @@ function updateSelectionPanel(): void {
   if (!selectedImage && !selectedToken) {
     selectionPanel.classList.remove("is-open");
     selectionPanel.setAttribute("aria-hidden", "true");
+    tokenNameEditing = false;
     return;
   }
 
   if (selectedImage) {
+    tokenNameEditing = false;
     selectionEyebrow.textContent = "图片检视";
     selectionTitle.textContent = selectedImage.name;
     imageSelectionControls.hidden = false;
@@ -570,16 +578,21 @@ function updateSelectionPanel(): void {
 
   if (selectedToken) {
     const canEditToken = canControlToken(selectedToken);
+    const isEditingTokenName = tokenNameEditing && canEditToken;
 
     selectionEyebrow.textContent = "角色检视";
     selectionTitle.textContent = selectedToken.name;
     imageSelectionControls.hidden = true;
     imageSelectionActions.hidden = true;
     tokenSelectionForm.hidden = false;
+    tokenNameDisplay.hidden = isEditingTokenName;
+    tokenNameValue.textContent = selectedToken.name;
+    editTokenNameButton.disabled = !canEditToken;
+    tokenNameField.hidden = !isEditingTokenName;
     tokenNameInput.disabled = !canEditToken;
     tokenPanelHelp.textContent = canEditToken ? "修改后会同步到所有客户端。" : "只有主持人或该角色玩家可以修改姓名。";
 
-    if (document.activeElement !== tokenNameInput) {
+    if (document.activeElement !== tokenNameInput || !isEditingTokenName) {
       tokenNameInput.value = selectedToken.name;
     }
   }
@@ -593,6 +606,7 @@ function selectImage(imageId: string | null): void {
   if (imageId) {
     selectedTokenId = null;
     inspectedTokenId = null;
+    tokenNameEditing = false;
   }
   updateSelectionPanel();
 }
@@ -601,9 +615,13 @@ function selectToken(tokenId: string | null, inspect = false): void {
   selectedTokenId = tokenId;
   if (tokenId) {
     selectedImageId = null;
+    if (inspect && inspectedTokenId !== tokenId) {
+      tokenNameEditing = false;
+    }
     inspectedTokenId = inspect ? tokenId : inspectedTokenId;
   } else {
     inspectedTokenId = null;
+    tokenNameEditing = false;
   }
   updateSelectionPanel();
 }
@@ -622,6 +640,7 @@ function setAppMode(nextMode: AppMode): void {
   if (!isPlayMode()) {
     selectedTokenId = null;
     inspectedTokenId = null;
+    tokenNameEditing = false;
   }
 
   updateModeControls();
@@ -713,6 +732,7 @@ function deleteToken(tokenId: string): void {
   }
   if (inspectedTokenId === tokenId) {
     inspectedTokenId = null;
+    tokenNameEditing = false;
   }
   previewPath = [];
   previewTokenPosition = null;
@@ -789,6 +809,28 @@ function updateSelectedTokenName(name: string): void {
   sendTokenNameUpdate(token);
 }
 
+function startTokenNameEditing(): void {
+  const token = getInspectedToken();
+  if (!token || !canControlToken(token)) {
+    return;
+  }
+
+  tokenNameEditing = true;
+  updateSelectionPanel();
+  tokenNameInput.focus();
+  tokenNameInput.select();
+}
+
+function stopTokenNameEditing(): void {
+  if (!tokenNameEditing) {
+    return;
+  }
+
+  updateSelectedTokenName(tokenNameInput.value);
+  tokenNameEditing = false;
+  updateSelectionPanel();
+}
+
 modeSelect.addEventListener("change", () => {
   if (!isLoggedIn()) {
     return;
@@ -853,6 +895,7 @@ canvas.addEventListener("pointerdown", (event) => {
     selectedImageId = null;
     selectedTokenId = null;
     inspectedTokenId = null;
+    tokenNameEditing = false;
     updateSelectionPanel();
     interaction = {
       type: "pan-camera",
@@ -877,6 +920,7 @@ canvas.addEventListener("pointerdown", (event) => {
     selectedImageId = null;
     selectedTokenId = null;
     inspectedTokenId = null;
+    tokenNameEditing = false;
     updateSelectionPanel();
 
     if (logicTool === "add-token") {
@@ -953,6 +997,7 @@ canvas.addEventListener("pointerdown", (event) => {
       selectedImageId = null;
       selectedTokenId = null;
       inspectedTokenId = null;
+      tokenNameEditing = false;
       updateSelectionPanel();
     }
   }
@@ -1085,11 +1130,6 @@ canvas.addEventListener("dblclick", (event) => {
 
   event.preventDefault();
   selectToken(tokenHit.id, true);
-
-  if (canControlToken(tokenHit)) {
-    tokenNameInput.focus();
-    tokenNameInput.select();
-  }
 });
 
 canvas.addEventListener("contextmenu", (event) => {
@@ -1168,16 +1208,18 @@ layerDownButton.addEventListener("click", () => moveLayer("down"));
 layerTopButton.addEventListener("click", () => moveLayer("top"));
 layerBottomButton.addEventListener("click", () => moveLayer("bottom"));
 resetSizeButton.addEventListener("click", resetSelectedImageSize);
+editTokenNameButton.addEventListener("click", startTokenNameEditing);
 tokenNameInput.addEventListener("input", () => {
   updateSelectedTokenName(tokenNameInput.value);
 });
 tokenNameInput.addEventListener("change", () => {
   updateSelectedTokenName(tokenNameInput.value);
 });
+tokenNameInput.addEventListener("blur", stopTokenNameEditing);
 tokenSelectionForm.addEventListener("submit", (event) => {
   event.preventDefault();
   updateSelectedTokenName(tokenNameInput.value);
-  tokenNameInput.blur();
+  stopTokenNameEditing();
 });
 
 switchIdentityButton.addEventListener("click", () => {
