@@ -71,10 +71,7 @@
 
       <aside id="dice-panel" class="dice-panel" aria-label="骰子投掷器" hidden>
         <div class="dice-panel-heading">
-          <div>
-            <p class="panel-eyebrow">骰子</p>
-            <h2>投骰子</h2>
-          </div>
+          <h2>投骰子</h2>
           <button id="dice-clear" class="dice-clear-button" type="button">清空</button>
         </div>
         <div id="dice-options" class="dice-options" aria-label="选择要投掷的骰子">
@@ -113,16 +110,15 @@
             <button class="dice-option" type="button" data-die="100">d100</button>
             <button class="dice-adjust-button" type="button" data-die="100" data-dice-action="increase" aria-label="增加 d100">+</button>
           </div>
+          <label class="dice-modifier-field">
+            <span class="dice-modifier-label">加值</span>
+            <span class="dice-modifier-control">
+              <button id="dice-modifier-decrease" class="dice-adjust-button" type="button" aria-label="减少加值">-</button>
+              <input id="dice-modifier" type="number" inputmode="numeric" step="1" value="0" aria-label="投掷加值" />
+              <button id="dice-modifier-increase" class="dice-adjust-button" type="button" aria-label="增加加值">+</button>
+            </span>
+          </label>
         </div>
-        <label class="dice-modifier-field">
-          <span>加值</span>
-          <span class="dice-modifier-control">
-            <button id="dice-modifier-decrease" class="dice-adjust-button" type="button" aria-label="减少加值">-</button>
-            <input id="dice-modifier" type="number" inputmode="numeric" step="1" value="0" aria-label="投掷加值" />
-            <button id="dice-modifier-increase" class="dice-adjust-button" type="button" aria-label="增加加值">+</button>
-          </span>
-        </label>
-        <div id="dice-selection" class="dice-selection">点击骰子来加入投掷池</div>
         <button id="dice-roll" class="dice-roll-button" type="button" disabled>投掷</button>
       </aside>
 

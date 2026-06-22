@@ -129,7 +129,6 @@ const saveAvatarEditButton = mustQuery<HTMLButtonElement>("#save-avatar-edit");
 const dicePanel = mustQuery<HTMLElement>("#dice-panel");
 const diceOptionButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".dice-option"));
 const diceAdjustButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".dice-adjust-button[data-die]"));
-const diceSelection = mustQuery<HTMLDivElement>("#dice-selection");
 const diceRollButton = mustQuery<HTMLButtonElement>("#dice-roll");
 const diceClearButton = mustQuery<HTMLButtonElement>("#dice-clear");
 const diceModifierInput = mustQuery<HTMLInputElement>("#dice-modifier");
@@ -415,7 +414,7 @@ function formatDiceSelection(): string {
   const modifier = formatDiceModifier(getDiceModifier());
 
   if (parts.length === 0) {
-    return "点击骰子来加入投掷池";
+    return "";
   }
 
   return modifier === null ? parts.join(" + ") : `${parts.join(" + ")} ${modifier}`;
@@ -453,7 +452,6 @@ function renderDicePanel(): void {
     button.disabled = button.dataset.diceAction === "decrease" && count === 0;
   }
 
-  diceSelection.textContent = formatDiceSelection();
   diceRollButton.disabled = selectedDice.size === 0;
 }
 

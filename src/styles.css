@@ -320,7 +320,7 @@ button {
 
 .dice-panel-heading {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
@@ -413,16 +413,24 @@ button {
 
 .dice-modifier-field {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: #93a4b8;
   font-weight: 800;
+}
+
+.dice-modifier-label {
+  justify-self: center;
+  font-size: 10px;
+  line-height: 1;
+  writing-mode: vertical-rl;
 }
 
 .dice-modifier-field input {
   width: 100%;
   min-height: 32px;
+  appearance: textfield;
   border: 0;
   border-right: 1px solid rgb(255 255 255 / 10%);
   border-left: 1px solid rgb(255 255 255 / 10%);
@@ -434,15 +442,15 @@ button {
   text-align: center;
 }
 
+.dice-modifier-field input::-webkit-inner-spin-button,
+.dice-modifier-field input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
 .dice-modifier-field input:focus {
   background: rgb(22 45 66 / 92%);
   outline: none;
-}
-
-.dice-selection {
-  min-height: 20px;
-  color: #93a4b8;
-  line-height: 1.45;
 }
 
 .dice-roll-button {
