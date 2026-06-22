@@ -27,7 +27,6 @@ import {
   roomBoundaryEdgeSets,
   roomKeyFromCells,
   sameCell,
-  toggleBlockedEdge as toggleGridBlockedEdge,
   worldToCell,
 } from "./grid";
 import {
@@ -69,6 +68,8 @@ import type {
   Vector2,
   WallEdgeType,
   ChatMessage,
+  GridIntersection,
+  WallEdge,
 } from "./types";
 import { createViewport } from "./viewport";
 
@@ -201,6 +202,9 @@ let movingTokens: MovingToken[] = [];
 let previewTokenPosition: Vector2 | null = null;
 let previewPath: Cell[] = [];
 let previewRoomCells: Cell[] = [];
+let hoverWallIntersection: GridIntersection | null = null;
+let previewWallEdges: WallEdge[] = [];
+let previewWallTargetBlocked = true;
 let imageSnapshotVersion = 0;
 let tokenNameEditing = false;
 let isChatPanelOpen = false;
@@ -583,6 +587,71 @@ function hitTestDoor(worldPoint: Vector2): SceneDoor | null {
   return distanceToEdge(worldPoint, door) <= Math.max(4, 10 / camera.zoom) ? door : null;
 }
 
+function nearestGridIntersection(worldPoint: Vector2): GridIntersection {
+  return {
+    x: Math.round(worldPoint.x / GRID_CELL_SIZE),
+    y: Math.round(worldPoint.y / GRID_CELL_SIZE),
+  };
+}
+
+function hitTestWallIntersection(worldPoint: Vector2): GridIntersection | null {
+  const intersection = nearestGridIntersection(worldPoint);
+  const intersectionWorld = {
+    x: intersection.x * GRID_CELL_SIZE,
+    y: intersection.y * GRID_CELL_SIZE,
+  };
+  const hitRadius = Math.min(GRID_CELL_SIZE * 0.45, 12 / camera.zoom);
+  const distance = Math.hypot(worldPoint.x - intersectionWorld.x, worldPoint.y - intersectionWorld.y);
+
+  return distance <= hitRadius ? intersection : null;
+}
+
+function wallDragTarget(start: GridIntersection, worldPoint: Vector2): GridIntersection {
+  const rawTarget = nearestGridIntersection(worldPoint);
+  const dx = rawTarget.x - start.x;
+  const dy = rawTarget.y - start.y;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return { x: rawTarget.x, y: start.y };
+  }
+
+  return { x: start.x, y: rawTarget.y };
+}
+
+function wallEdgesBetween(start: GridIntersection, target: GridIntersection): WallEdge[] {
+  if (start.y === target.y) {
+    const minX = Math.min(start.x, target.x);
+    const maxX = Math.max(start.x, target.x);
+    return Array.from({ length: maxX - minX }, (_, index) => ({
+      type: "horizontal",
+      x: minX + index,
+      y: start.y,
+    }));
+  }
+
+  const minY = Math.min(start.y, target.y);
+  const maxY = Math.max(start.y, target.y);
+  return Array.from({ length: maxY - minY }, (_, index) => ({
+    type: "vertical",
+    x: start.x,
+    y: minY + index,
+  }));
+}
+
+function wallEdgesTargetBlocked(edges: WallEdge[]): boolean {
+  const firstEdge = edges[0];
+
+  if (!firstEdge) {
+    return true;
+  }
+
+  return !blockedEdgeSet(firstEdge.type, blockedVerticalEdges, blockedHorizontalEdges).has(edgeKey(firstEdge));
+}
+
+function updateWallHover(worldPoint: Vector2): void {
+  hoverWallIntersection = canDrawWalls() ? hitTestWallIntersection(worldPoint) : null;
+}
+
 function sceneImageSnapshot(image: SceneImage): SceneImageSnapshot {
   const { image: _imageElement, ...snapshot } = image;
   return { ...snapshot };
@@ -645,6 +714,10 @@ function isEditingTokens(): boolean {
 
 function isEditingRooms(): boolean {
   return isAdmin() && appMode === "edit" && editMode === "rooms";
+}
+
+function canDrawWalls(): boolean {
+  return isEditingBlocking() && logicTool === "wall";
 }
 
 function isPlayMode(): boolean {
@@ -918,6 +991,9 @@ function render(): void {
       interaction,
       movingTokens,
       previewTokenPosition,
+      hoverWallIntersection: canDrawWalls() ? hoverWallIntersection : null,
+      previewWallEdges,
+      previewWallTargetBlocked,
     },
   );
 }
@@ -956,7 +1032,8 @@ function hitTestRotateHandle(screenPoint: Vector2): boolean {
 
 function setCursor(screenPoint: Vector2): void {
   if (interaction) {
-    canvas.classList.add("is-dragging");
+    canvas.classList.toggle("is-dragging", interaction.type !== "draw-wall");
+    canvas.style.cursor = interaction.type === "draw-wall" ? "crosshair" : "grabbing";
     return;
   }
 
@@ -1336,6 +1413,37 @@ function toggleDoorAtEdge(edge: { type: WallEdgeType; x: number; y: number }): v
   networkClient.sendDoorChanged(door);
 }
 
+function applyWallEdges(edges: WallEdge[], blocked: boolean): void {
+  if (edges.length === 0) {
+    return;
+  }
+
+  for (const edge of edges) {
+    const wallSet = blockedEdgeSet(edge.type, blockedVerticalEdges, blockedHorizontalEdges);
+    const wallKey = edgeKey(edge);
+
+    if (blocked) {
+      const doorIdAtEdge = doorId(edge);
+      if (sceneDoors.delete(doorIdAtEdge)) {
+        if (selectedDoorId === doorIdAtEdge) {
+          selectedDoorId = null;
+        }
+        networkClient.sendDoorDeleted(edge.type, edge.x, edge.y);
+      }
+
+      if (!wallSet.has(wallKey)) {
+        wallSet.add(wallKey);
+        networkClient.sendBlockedEdgeChanged(edge.type, edge.x, edge.y, true);
+      }
+    } else if (wallSet.delete(wallKey)) {
+      networkClient.sendBlockedEdgeChanged(edge.type, edge.x, edge.y, false);
+    }
+  }
+
+  previewPath = [];
+  updateSelectionPanel();
+}
+
 function updateSelectedDoorState(isOpen: boolean): void {
   const door = getSelectedDoor();
   if (!door || !canInspectDoor() || door.isOpen === isOpen) {
@@ -1677,7 +1785,10 @@ clearWallsButton.addEventListener("click", () => {
 
   blockedVerticalEdges.clear();
   blockedHorizontalEdges.clear();
+  sceneDoors.clear();
+  selectedDoorId = null;
   previewPath = [];
+  previewWallEdges = [];
   networkClient.sendBlockedEdgesCleared();
 });
 
@@ -1761,26 +1872,31 @@ canvas.addEventListener("pointerdown", (event) => {
       return;
     }
 
-    const edge = nearestEditableEdge(worldPoint);
     if (logicTool === "door") {
+      const edge = nearestEditableEdge(worldPoint);
       toggleDoorAtEdge(edge);
       return;
     }
 
-    const set = blockedEdgeSet(edge.type, blockedVerticalEdges, blockedHorizontalEdges);
-    const key = edgeKey(edge);
-    const blocked = !set.has(key);
-    const doorIdAtEdge = doorId(edge);
-    if (blocked && sceneDoors.delete(doorIdAtEdge)) {
-      if (selectedDoorId === doorIdAtEdge) {
-        selectedDoorId = null;
-      }
-      networkClient.sendDoorDeleted(edge.type, edge.x, edge.y);
+    const start = hitTestWallIntersection(worldPoint);
+    if (!start) {
+      hoverWallIntersection = null;
+      return;
     }
-    toggleGridBlockedEdge(edge.type, edge.x, edge.y, blockedVerticalEdges, blockedHorizontalEdges);
-    previewPath = [];
-    updateSelectionPanel();
-    networkClient.sendBlockedEdgeChanged(edge.type, edge.x, edge.y, blocked);
+
+    hoverWallIntersection = start;
+    previewWallEdges = [];
+    previewWallTargetBlocked = true;
+    interaction = {
+      type: "draw-wall",
+      pointerId: event.pointerId,
+      start,
+      target: start,
+      targetBlocked: true,
+      edges: [],
+    };
+    canvas.setPointerCapture(event.pointerId);
+    setCursor(screenPoint);
     return;
   }
 
@@ -1869,6 +1985,7 @@ canvas.addEventListener("pointermove", (event) => {
 
   if (!currentInteraction || currentInteraction.pointerId !== event.pointerId) {
     updateRoomPreview(worldPoint);
+    updateWallHover(worldPoint);
     setCursor(screenPoint);
     return;
   }
@@ -1907,6 +2024,15 @@ canvas.addEventListener("pointermove", (event) => {
       currentInteraction.path = path;
       previewPath = path;
     }
+  }
+
+  if (currentInteraction.type === "draw-wall") {
+    currentInteraction.target = wallDragTarget(currentInteraction.start, worldPoint);
+    currentInteraction.edges = wallEdgesBetween(currentInteraction.start, currentInteraction.target);
+    currentInteraction.targetBlocked = wallEdgesTargetBlocked(currentInteraction.edges);
+    hoverWallIntersection = currentInteraction.start;
+    previewWallEdges = currentInteraction.edges;
+    previewWallTargetBlocked = currentInteraction.targetBlocked;
   }
 
   if (currentInteraction.type === "pan-camera") {
@@ -1951,6 +2077,13 @@ canvas.addEventListener("pointerup", (event) => {
       previewTokenPosition = null;
     }
 
+    if (currentInteraction.type === "draw-wall") {
+      applyWallEdges(currentInteraction.edges, currentInteraction.targetBlocked);
+      previewWallEdges = [];
+      previewWallTargetBlocked = true;
+      hoverWallIntersection = hitTestWallIntersection(screenToWorld(screenPointFromEvent(event)));
+    }
+
     interaction = null;
     canvas.releasePointerCapture(event.pointerId);
   }
@@ -1963,6 +2096,11 @@ canvas.addEventListener("pointercancel", (event) => {
     if (interaction.type === "drag-token") {
       previewPath = [];
       previewTokenPosition = null;
+    }
+
+    if (interaction.type === "draw-wall") {
+      previewWallEdges = [];
+      previewWallTargetBlocked = true;
     }
 
     interaction = null;
@@ -1991,6 +2129,7 @@ canvas.addEventListener("contextmenu", (event) => {
 
 canvas.addEventListener("pointerleave", () => {
   previewRoomCells = [];
+  hoverWallIntersection = null;
 });
 
 canvas.addEventListener(

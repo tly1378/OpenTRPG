@@ -4,6 +4,7 @@ import { cellCenter, roomCenter } from "./grid";
 import { getImageCorners, getResizeHandlePositions, getRotateHandlePosition } from "./imageTransform";
 import type {
   Cell,
+  GridIntersection,
   Interaction,
   MovingToken,
   ResizeHandle,
@@ -12,6 +13,7 @@ import type {
   SceneRoom,
   SceneToken,
   Vector2,
+  WallEdge,
   WallEdgeType,
 } from "./types";
 
@@ -40,6 +42,9 @@ export type RenderState = {
   interaction: Interaction | null;
   movingTokens: MovingToken[];
   previewTokenPosition: Vector2 | null;
+  hoverWallIntersection: GridIntersection | null;
+  previewWallEdges: WallEdge[];
+  previewWallTargetBlocked: boolean;
 };
 
 export function renderScene(ctx: CanvasRenderingContext2D, viewport: Viewport, state: RenderState): void {
@@ -57,6 +62,7 @@ export function renderScene(ctx: CanvasRenderingContext2D, viewport: Viewport, s
   if (state.showLogicMap) {
     drawRooms(ctx, viewport, state.rooms, state.selectedRoomId, state.previewRoomCells);
     drawWalls(ctx, viewport, state.blockedVerticalEdges, state.blockedHorizontalEdges);
+    drawWallEditPreview(ctx, viewport, state.hoverWallIntersection, state.previewWallEdges, state.previewWallTargetBlocked);
     drawDoors(ctx, viewport, state.doors, state.selectedDoorId);
   }
   if (state.previewPath.length > 0) {
@@ -201,6 +207,60 @@ function drawWalls(
   }
 
   ctx.restore();
+}
+
+function drawWallEditPreview(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  hoverIntersection: GridIntersection | null,
+  previewEdges: WallEdge[],
+  targetBlocked: boolean,
+): void {
+  if (!hoverIntersection && previewEdges.length === 0) {
+    return;
+  }
+
+  ctx.save();
+
+  if (previewEdges.length > 0) {
+    ctx.lineCap = "round";
+    ctx.lineWidth = Math.max(5, 8 * viewport.camera.zoom);
+    ctx.strokeStyle = targetBlocked ? "rgb(125 211 252 / 0.72)" : "rgb(248 113 113 / 0.72)";
+    for (const edge of previewEdges) {
+      drawEdge(ctx, viewport, edge.type, edge.x, edge.y);
+    }
+  }
+
+  if (hoverIntersection) {
+    drawWallStartCrosshair(ctx, viewport, hoverIntersection);
+  }
+
+  ctx.restore();
+}
+
+function drawWallStartCrosshair(ctx: CanvasRenderingContext2D, viewport: Viewport, intersection: GridIntersection): void {
+  const center = viewport.worldToScreen({
+    x: intersection.x * GRID_CELL_SIZE,
+    y: intersection.y * GRID_CELL_SIZE,
+  });
+  const boxSize = Math.max(18, 24 * viewport.camera.zoom);
+  const arm = boxSize * 0.72;
+  const half = boxSize / 2;
+
+  ctx.fillStyle = "rgb(125 211 252 / 0.12)";
+  ctx.strokeStyle = "rgb(125 211 252 / 0.68)";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 5]);
+  ctx.fillRect(center.x - half, center.y - half, boxSize, boxSize);
+  ctx.strokeRect(center.x - half, center.y - half, boxSize, boxSize);
+
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(center.x - arm, center.y);
+  ctx.lineTo(center.x + arm, center.y);
+  ctx.moveTo(center.x, center.y - arm);
+  ctx.lineTo(center.x, center.y + arm);
+  ctx.stroke();
 }
 
 function drawDoors(

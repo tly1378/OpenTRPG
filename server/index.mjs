@@ -547,6 +547,7 @@ function handleBlockedEdgesClear(client) {
 
   blockedVerticalEdges.clear();
   blockedHorizontalEdges.clear();
+  sceneDoors.clear();
   client.lastSeenAt = Date.now();
   broadcastSceneSnapshot();
 }

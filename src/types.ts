@@ -19,6 +19,17 @@ export type EditMode = "background" | "blocking" | "tokens" | "rooms";
 export type LogicTool = "add-token" | "delete-token" | "wall" | "door" | "room";
 export type WallEdgeType = "vertical" | "horizontal";
 
+export type GridIntersection = {
+  x: number;
+  y: number;
+};
+
+export type WallEdge = {
+  type: WallEdgeType;
+  x: number;
+  y: number;
+};
+
 export type Identity =
   | {
       type: "admin";
@@ -129,4 +140,12 @@ export type Interaction =
       startCell: Cell;
       targetCell: Cell;
       path: Cell[];
+    }
+  | {
+      type: "draw-wall";
+      pointerId: number;
+      start: GridIntersection;
+      target: GridIntersection;
+      targetBlocked: boolean;
+      edges: WallEdge[];
     };
