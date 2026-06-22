@@ -310,6 +310,10 @@ function formatChatTime(createdAt: number): string {
   }).format(new Date(createdAt));
 }
 
+function formatCell(cell: Cell): string {
+  return `(${cell.x}, ${cell.y})`;
+}
+
 function applyChatMessages(messages: ChatMessage[], mode: "replace" | "append"): void {
   if (mode === "replace") {
     chatMessages.splice(0, chatMessages.length, ...messages);
@@ -341,7 +345,7 @@ function renderChatPanel(): void {
   if (chatMessages.length === 0) {
     const empty = document.createElement("div");
     empty.className = "chat-empty";
-    empty.textContent = "投骰结果会显示在这里。";
+    empty.textContent = "投骰和移动记录会显示在这里。";
     chatMessageList.replaceChildren(empty);
     return;
   }
@@ -351,23 +355,37 @@ function renderChatPanel(): void {
     const meta = document.createElement("div");
     const author = document.createElement("span");
     const time = document.createElement("span");
-    const formula = document.createElement("div");
-    const total = document.createElement("div");
-    const detail = document.createElement("div");
 
     item.className = "chat-message";
     meta.className = "chat-message-meta";
     author.className = "chat-message-author";
-    formula.className = "chat-dice-formula";
-    total.className = "chat-dice-total";
-    detail.className = "chat-dice-detail";
     author.textContent = message.authorName;
     time.textContent = formatChatTime(message.createdAt);
-    formula.textContent = message.formula;
-    total.textContent = `总和 ${message.total}`;
-    detail.textContent = message.detail;
     meta.append(author, time);
-    item.append(meta, formula, total, detail);
+
+    if (message.kind === "dice") {
+      const formula = document.createElement("div");
+      const total = document.createElement("div");
+      const detail = document.createElement("div");
+
+      formula.className = "chat-dice-formula";
+      total.className = "chat-dice-total";
+      detail.className = "chat-dice-detail";
+      formula.textContent = message.formula;
+      total.textContent = `总和 ${message.total}`;
+      detail.textContent = message.detail;
+      item.append(meta, formula, total, detail);
+    } else {
+      const summary = document.createElement("div");
+      const detail = document.createElement("div");
+
+      summary.className = "chat-move-summary";
+      detail.className = "chat-move-detail";
+      summary.textContent = `${message.tokenName} 移动了 ${message.distance} 格`;
+      detail.textContent = `${formatCell(message.fromCell)} 到 ${formatCell(message.toCell)}，斜向按 1 格计算`;
+      item.append(meta, summary, detail);
+    }
+
     return item;
   });
 
@@ -2070,7 +2088,7 @@ canvas.addEventListener("pointerup", (event) => {
           startedAt: performance.now(),
           duration: Math.max(1, currentInteraction.path.length - 1) * TOKEN_STEP_ANIMATION_MS,
         });
-        networkClient.sendTokenMoved(token);
+        networkClient.sendTokenMoved(token, currentInteraction.path);
       }
 
       previewPath = [];

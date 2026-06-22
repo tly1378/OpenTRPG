@@ -1,4 +1,4 @@
-import type { ChatMessage, Identity, SceneDoor, SceneImageSnapshot, SceneRoom, SceneToken, WallEdgeType } from "./types";
+import type { Cell, ChatMessage, DiceChatMessage, Identity, SceneDoor, SceneImageSnapshot, SceneRoom, SceneToken, WallEdgeType } from "./types";
 
 export type ConnectionStatus = "offline" | "connecting" | "online";
 
@@ -129,7 +129,7 @@ export class NetworkClient {
     });
   }
 
-  sendTokenMoved(token: SceneToken): void {
+  sendTokenMoved(token: SceneToken, path: Cell[]): void {
     this.send({
       type: "scene:token-move",
       tokenId: token.id,
@@ -139,6 +139,7 @@ export class NetworkClient {
       avatarOffsetX: token.avatarOffsetX,
       avatarOffsetY: token.avatarOffsetY,
       cell: token.cell,
+      path,
     });
   }
 
@@ -184,7 +185,7 @@ export class NetworkClient {
     });
   }
 
-  sendDiceChatMessage(message: Pick<ChatMessage, "kind" | "formula" | "total" | "detail">): void {
+  sendDiceChatMessage(message: Pick<DiceChatMessage, "kind" | "formula" | "total" | "detail">): void {
     this.send({
       type: "chat:dice",
       message,

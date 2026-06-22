@@ -695,6 +695,18 @@ button {
   font-size: 12px;
 }
 
+.chat-move-summary {
+  color: #86efac;
+  font-size: 14px;
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+
+.chat-move-detail {
+  color: #93a4b8;
+  font-size: 12px;
+}
+
 .selection-panel {
   position: fixed;
   top: 0;

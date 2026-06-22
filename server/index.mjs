@@ -315,6 +315,63 @@ function normalizeDiceChatMessage(message) {
   };
 }
 
+function normalizeMovementPath(path, fromCell, toCell) {
+  if (!Array.isArray(path) || path.length < 2 || path.length > 512) {
+    return null;
+  }
+
+  const cells = [];
+  for (const cell of path) {
+    if (!isFiniteCell(cell)) {
+      return null;
+    }
+
+    cells.push({ x: cell.x, y: cell.y });
+  }
+
+  const firstCell = cells[0];
+  const lastCell = cells[cells.length - 1];
+  if (
+    firstCell.x !== fromCell.x ||
+    firstCell.y !== fromCell.y ||
+    lastCell.x !== toCell.x ||
+    lastCell.y !== toCell.y
+  ) {
+    return null;
+  }
+
+  for (let index = 1; index < cells.length; index += 1) {
+    const previousCell = cells[index - 1];
+    const currentCell = cells[index];
+    const dx = Math.abs(currentCell.x - previousCell.x);
+    const dy = Math.abs(currentCell.y - previousCell.y);
+
+    if (dx > 1 || dy > 1 || (dx === 0 && dy === 0)) {
+      return null;
+    }
+  }
+
+  return cells;
+}
+
+function movementDistance(fromCell, toCell, path) {
+  const normalizedPath = normalizeMovementPath(path, fromCell, toCell);
+  if (normalizedPath) {
+    return normalizedPath.length - 1;
+  }
+
+  return Math.max(Math.abs(toCell.x - fromCell.x), Math.abs(toCell.y - fromCell.y));
+}
+
+function pushChatMessage(chatMessage) {
+  chatMessages.push(chatMessage);
+  if (chatMessages.length > maxChatMessages) {
+    chatMessages.splice(0, chatMessages.length - maxChatMessages);
+  }
+
+  broadcastChatMessage(chatMessage);
+}
+
 function isCellOccupied(cell, exceptTokenId) {
   return sceneTokens.some(
     (token) =>
@@ -483,10 +540,16 @@ function handleSceneTokenMove(client, message) {
     return;
   }
 
-  token.cell = {
+  const fromCell = { ...token.cell };
+  const toCell = {
     x: cell.x,
     y: cell.y,
   };
+  if (fromCell.x === toCell.x && fromCell.y === toCell.y) {
+    return;
+  }
+
+  token.cell = { ...toCell };
 
   const name = normalizeTokenName(message.name);
   if (name && token.name !== name) {
@@ -495,8 +558,22 @@ function handleSceneTokenMove(client, message) {
   }
   Object.assign(token, normalizeTokenAvatarFields(message));
 
-  client.lastSeenAt = Date.now();
+  const now = Date.now();
+  client.lastSeenAt = now;
   broadcastSceneSnapshot();
+  pushChatMessage({
+    id: randomUUID(),
+    authorId: String(client.identity.id ?? client.clientId),
+    authorName: String(client.identity.name ?? "未知用户").slice(0, 24),
+    authorType: client.identity.type === "admin" ? "admin" : "player",
+    createdAt: now,
+    kind: "move",
+    tokenId: token.id,
+    tokenName: token.name.slice(0, 24),
+    fromCell,
+    toCell,
+    distance: movementDistance(fromCell, toCell, message.path),
+  });
 }
 
 function handleSceneTokenUpdate(client, message) {
@@ -618,13 +695,8 @@ function handleChatDice(client, message) {
     ...diceMessage,
   };
 
-  chatMessages.push(chatMessage);
-  if (chatMessages.length > maxChatMessages) {
-    chatMessages.splice(0, chatMessages.length - maxChatMessages);
-  }
-
   client.lastSeenAt = now;
-  broadcastChatMessage(chatMessage);
+  pushChatMessage(chatMessage);
 }
 
 wss.on("connection", (socket) => {

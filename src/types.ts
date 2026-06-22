@@ -83,17 +83,31 @@ export type SceneRoom = {
   cells: Cell[];
 };
 
-export type ChatMessage = {
+export type ChatMessageBase = {
   id: string;
   authorId: string;
   authorName: string;
   authorType: Identity["type"];
   createdAt: number;
+};
+
+export type DiceChatMessage = ChatMessageBase & {
   kind: "dice";
   formula: string;
   total: number;
   detail: string;
 };
+
+export type MoveChatMessage = ChatMessageBase & {
+  kind: "move";
+  tokenId: string;
+  tokenName: string;
+  fromCell: Cell;
+  toCell: Cell;
+  distance: number;
+};
+
+export type ChatMessage = DiceChatMessage | MoveChatMessage;
 
 export type MovingToken = {
   tokenId: string;
