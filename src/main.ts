@@ -859,7 +859,7 @@ function isEditingBlocking(): boolean {
 }
 
 function isEditingRooms(): boolean {
-  return isAdmin() && appMode === "edit" && editMode === "rooms";
+  return isEditingBlocking();
 }
 
 function canDrawWalls(): boolean {
@@ -900,7 +900,7 @@ function availableModes(): AppMode[] {
 
 function rebuildModeOptions(): void {
   rebuildModeSelectOptions(modeSelect, availableModes());
-  rebuildEditModeSelectOptions(editModeSelect, ["background", "blocking", "rooms"]);
+  rebuildEditModeSelectOptions(editModeSelect, ["background", "blocking"]);
 }
 
 function renderIdentityList(): void {
@@ -1177,13 +1177,16 @@ function hitTestToken(worldPoint: Vector2): SceneToken | null {
   return findHitToken(sceneTokens, worldPoint, { interaction, movingTokens, previewTokenPosition }, camera.zoom);
 }
 
-function hitTestRoom(worldPoint: Vector2): SceneRoom | null {
-  const targetCell = worldToCell(worldPoint);
+function roomAtCell(targetCell: Cell): SceneRoom | null {
   return [...sceneRooms].reverse().find((room) => room.cells.some((cell) => sameCell(cell, targetCell))) ?? null;
 }
 
+function hitTestRoom(worldPoint: Vector2): SceneRoom | null {
+  return roomAtCell(worldToCell(worldPoint));
+}
+
 function updateRoomPreview(worldPoint: Vector2): void {
-  previewRoomCells = isEditingRooms() && logicTool === "room" ? closedRegionAt(worldPoint) : [];
+  previewRoomCells = isEditingRooms() && logicTool === "room" && !hitTestRoom(worldPoint) ? closedRegionAt(worldPoint) : [];
 }
 
 function hitTestResizeHandle(screenPoint: Vector2) {
@@ -1208,16 +1211,16 @@ function setCursor(screenPoint: Vector2): void {
 
   const tokenHit = hitTestToken(worldPoint);
   const doorHit = canInspectDoor() ? hitTestDoor(worldPoint) : null;
-  const roomHit = isEditingRooms() && logicTool === "inspect-room" ? hitTestRoom(worldPoint) : null;
+  const roomHit = isEditingRooms() && (logicTool === "room" || logicTool === "inspect-room") ? hitTestRoom(worldPoint) : null;
 
   if (isEditingBackground() && hitTestRotateHandle(screenPoint)) {
     canvas.style.cursor = "grab";
   } else if (isEditingBackground() && resizeHandle) {
     canvas.style.cursor = getResizeCursor(resizeHandle);
-  } else if ((isEditingBlocking() && (logicTool === "wall" || logicTool === "door")) || (isEditingRooms() && logicTool === "room")) {
-    canvas.style.cursor = "crosshair";
   } else if (roomHit) {
     canvas.style.cursor = "pointer";
+  } else if ((isEditingBlocking() && (logicTool === "wall" || logicTool === "door")) || (isEditingRooms() && logicTool === "room")) {
+    canvas.style.cursor = "crosshair";
   } else if (doorHit) {
     canvas.style.cursor = "pointer";
   } else if (isPlayMode() && tokenHit && canControlToken(tokenHit)) {
@@ -1443,10 +1446,8 @@ function setEditMode(nextMode: EditMode): void {
   previewPath = [];
   previewTokenPosition = null;
 
-  if (editMode === "blocking" && logicTool !== "wall" && logicTool !== "door") {
+  if (editMode === "blocking" && logicTool !== "wall" && logicTool !== "door" && logicTool !== "room" && logicTool !== "inspect-room") {
     logicTool = "wall";
-  } else if (editMode === "rooms") {
-    logicTool = "inspect-room";
   }
 
   if (!isEditingBackground()) {
@@ -1648,10 +1649,93 @@ function toggleDoorAtEdge(edge: { type: WallEdgeType; x: number; y: number }): v
   networkClient.sendDoorChanged(door);
 }
 
+function cellsBesideWallEdge(edge: WallEdge): [Cell, Cell] {
+  if (edge.type === "vertical") {
+    return [
+      { x: edge.x - 1, y: edge.y },
+      { x: edge.x, y: edge.y },
+    ];
+  }
+
+  return [
+    { x: edge.x, y: edge.y - 1 },
+    { x: edge.x, y: edge.y },
+  ];
+}
+
+function roomsAffectedByWallDeletion(edges: WallEdge[]): SceneRoom[] {
+  const affectedRooms = new Map<string, SceneRoom>();
+
+  for (const edge of edges) {
+    const wallSet = blockedEdgeSet(edge.type, blockedVerticalEdges, blockedHorizontalEdges);
+    if (!wallSet.has(edgeKey(edge))) {
+      continue;
+    }
+
+    const [firstCell, secondCell] = cellsBesideWallEdge(edge);
+    const firstRoom = roomAtCell(firstCell);
+    const secondRoom = roomAtCell(secondCell);
+    if (firstRoom && secondRoom && firstRoom.id === secondRoom.id) {
+      continue;
+    }
+
+    if (firstRoom) {
+      affectedRooms.set(firstRoom.id, firstRoom);
+    }
+    if (secondRoom) {
+      affectedRooms.set(secondRoom.id, secondRoom);
+    }
+  }
+
+  return [...affectedRooms.values()];
+}
+
+function roomDisplayName(room: SceneRoom): string {
+  return room.name.trim() || "未命名房间";
+}
+
+function confirmWallDeletionAffectedRooms(rooms: SceneRoom[]): boolean {
+  if (rooms.length === 0) {
+    return true;
+  }
+
+  const roomList = rooms.map((room) => `- ${roomDisplayName(room)}`).join("\n");
+  return window.confirm(`删除这堵墙会一并删除以下房间：\n${roomList}\n\n确定要继续吗？`);
+}
+
+function deleteRooms(rooms: SceneRoom[]): void {
+  const roomIds = new Set(rooms.map((room) => room.id));
+  if (roomIds.size === 0) {
+    return;
+  }
+
+  for (let index = sceneRooms.length - 1; index >= 0; index -= 1) {
+    const room = sceneRooms[index];
+    if (!roomIds.has(room.id)) {
+      continue;
+    }
+
+    sceneRooms.splice(index, 1);
+    networkClient.sendRoomDeleted(room.id);
+  }
+
+  if (selectedRoomId && roomIds.has(selectedRoomId)) {
+    selectedRoomId = null;
+  }
+  previewRoomCells = [];
+}
+
 function applyWallEdges(edges: WallEdge[], blocked: boolean): void {
   if (edges.length === 0) {
     return;
   }
+
+  const affectedRooms = blocked ? [] : roomsAffectedByWallDeletion(edges);
+  if (!confirmWallDeletionAffectedRooms(affectedRooms)) {
+    return;
+  }
+
+  deleteRooms(affectedRooms);
 
   for (const edge of edges) {
     const wallSet = blockedEdgeSet(edge.type, blockedVerticalEdges, blockedHorizontalEdges);
@@ -2062,17 +2146,21 @@ clearWallsButton.addEventListener("click", () => {
     return;
   }
 
-  const shouldClearWalls = window.confirm("确定要清空所有阻挡边和门吗？此操作会同步到所有客户端。");
+  const shouldClearWalls = window.confirm("确定要清空所有阻挡边、门和房间吗？此操作会同步到所有客户端。");
   if (!shouldClearWalls) {
     return;
   }
 
+  deleteRooms([...sceneRooms]);
   blockedVerticalEdges.clear();
   blockedHorizontalEdges.clear();
   sceneDoors.clear();
   selectedDoorId = null;
+  selectedRoomId = null;
   previewPath = [];
+  previewRoomCells = [];
   previewWallEdges = [];
+  updateSelectionPanel();
   networkClient.sendBlockedEdgesCleared();
 });
 
@@ -2147,13 +2235,19 @@ canvas.addEventListener("pointerdown", (event) => {
   const rotateHandleHit = hitTestRotateHandle(screenPoint);
   const resizeHandle = hitTestResizeHandle(screenPoint);
 
-  if (isEditingBlocking() || isEditingRooms()) {
+  if (isEditingBlocking()) {
     selectedImageId = null;
     selectedTokenId = null;
 
-    if (isEditingRooms()) {
-      if (logicTool !== "room") {
+    if (logicTool === "room" || logicTool === "inspect-room") {
+      if (logicTool === "inspect-room") {
         selectRoom(hitTestRoom(worldPoint)?.id ?? null);
+        return;
+      }
+
+      const existingRoom = hitTestRoom(worldPoint);
+      if (existingRoom) {
+        selectRoom(existingRoom.id);
         return;
       }
 
@@ -2166,10 +2260,6 @@ canvas.addEventListener("pointerdown", (event) => {
 
     selectedRoomId = null;
     updateSelectionPanel();
-
-    if (!isEditingBlocking()) {
-      return;
-    }
 
     if (logicTool === "door") {
       const edge = nearestEditableEdge(worldPoint);

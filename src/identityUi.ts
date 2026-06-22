@@ -8,9 +8,8 @@ const MODE_LABELS: Record<AppMode, string> = {
 };
 
 const EDIT_MODE_LABELS: Record<EditMode, string> = {
-  background: "背景",
-  blocking: "阻挡",
-  rooms: "房间",
+  background: "美术地图",
+  blocking: "逻辑地图",
 };
 
 export function buildIdentities(characters: SceneCharacter[]): Identity[] {

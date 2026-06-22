@@ -36,7 +36,6 @@ export function updateModeControls(
   const isEditing = isLoggedIn && isAdmin && appMode === "edit";
   const isEditingBackground = isEditing && editMode === "background";
   const isEditingBlocking = isEditing && editMode === "blocking";
-  const isEditingRooms = isEditing && editMode === "rooms";
   const isPlaying = isLoggedIn && appMode === "play";
 
   controls.modeSelect.value = appMode;
@@ -53,8 +52,8 @@ export function updateModeControls(
   controls.wallModeButton.classList.toggle("is-hidden", !isEditingBlocking);
   controls.doorModeButton.disabled = !isEditingBlocking;
   controls.doorModeButton.classList.toggle("is-hidden", !isEditingBlocking);
-  controls.roomModeButton.disabled = !isEditingRooms;
-  controls.roomModeButton.classList.toggle("is-hidden", !isEditingRooms);
+  controls.roomModeButton.disabled = !isEditingBlocking;
+  controls.roomModeButton.classList.toggle("is-hidden", !isEditingBlocking);
   controls.clearWallsButton.disabled = !isEditingBlocking;
   controls.clearWallsButton.classList.toggle("is-hidden", !isEditingBlocking);
   controls.logicMapVisibilityButton.disabled = !isPlaying;
@@ -72,13 +71,13 @@ export function updateModeControls(
 
   controls.wallModeButton.classList.toggle("is-active", isEditingBlocking && logicTool === "wall");
   controls.doorModeButton.classList.toggle("is-active", isEditingBlocking && logicTool === "door");
-  controls.roomModeButton.classList.toggle("is-active", isEditingRooms && logicTool === "room");
+  controls.roomModeButton.classList.toggle("is-active", isEditingBlocking && logicTool === "room");
   controls.wallModeButton.setAttribute("aria-pressed", String(isEditingBlocking && logicTool === "wall"));
   controls.doorModeButton.setAttribute("aria-pressed", String(isEditingBlocking && logicTool === "door"));
-  controls.roomModeButton.setAttribute("aria-pressed", String(isEditingRooms && logicTool === "room"));
+  controls.roomModeButton.setAttribute("aria-pressed", String(isEditingBlocking && logicTool === "room"));
   controls.canvas.classList.toggle(
     "is-wall-mode",
-    (isEditingBlocking && (logicTool === "wall" || logicTool === "door")) || (isEditingRooms && logicTool === "room"),
+    isEditingBlocking && (logicTool === "wall" || logicTool === "door" || logicTool === "room"),
   );
   controls.canvas.classList.toggle("is-art-mode", isEditingBackground);
   controls.canvas.classList.toggle("is-play-mode", isLoggedIn && appMode === "play");
