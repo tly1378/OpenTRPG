@@ -13,6 +13,8 @@ const blockedVerticalEdges = new Set();
 const blockedHorizontalEdges = new Set();
 const sceneDoors = new Map();
 const sceneRooms = new Map();
+const chatMessages = [];
+const maxChatMessages = 100;
 
 const server = createServer((request, response) => {
   if (request.url === "/health") {
@@ -72,6 +74,26 @@ function sceneSnapshotPayload(serverTime = Date.now()) {
 function broadcastSceneSnapshot() {
   const payload = {
     ...sceneSnapshotPayload(),
+  };
+
+  for (const client of clients.values()) {
+    sendJson(client.socket, payload);
+  }
+}
+
+function chatHistoryPayload(serverTime = Date.now()) {
+  return {
+    type: "chat:history",
+    messages: chatMessages,
+    serverTime,
+  };
+}
+
+function broadcastChatMessage(message) {
+  const payload = {
+    type: "chat:message",
+    message,
+    serverTime: Date.now(),
   };
 
   for (const client of clients.values()) {
@@ -274,6 +296,25 @@ function normalizeTokenName(name) {
   return normalizedName.length > 0 ? normalizedName.slice(0, 24) : null;
 }
 
+function normalizeDiceChatMessage(message) {
+  if (!message || typeof message !== "object" || message.kind !== "dice") {
+    return null;
+  }
+
+  const formula = String(message.formula ?? "").trim().slice(0, 80);
+  const detail = String(message.detail ?? "").trim().slice(0, 240);
+  if (!formula || !detail || !Number.isFinite(message.total)) {
+    return null;
+  }
+
+  return {
+    kind: "dice",
+    formula,
+    total: Math.trunc(message.total),
+    detail,
+  };
+}
+
 function isCellOccupied(cell, exceptTokenId) {
   return sceneTokens.some(
     (token) =>
@@ -306,6 +347,7 @@ function handleHello(client, message) {
   });
   broadcastStatus();
   sendJson(client.socket, sceneSnapshotPayload(client.lastSeenAt));
+  sendJson(client.socket, chatHistoryPayload(client.lastSeenAt));
 }
 
 function handlePong(client, message) {
@@ -555,6 +597,35 @@ function handleRoomUpdate(client, message) {
   broadcastSceneSnapshot();
 }
 
+function handleChatDice(client, message) {
+  if (client.identity.type === "lobby") {
+    return;
+  }
+
+  const diceMessage = normalizeDiceChatMessage(message.message);
+  if (!diceMessage) {
+    return;
+  }
+
+  const now = Date.now();
+  const chatMessage = {
+    id: randomUUID(),
+    authorId: String(client.identity.id ?? client.clientId),
+    authorName: String(client.identity.name ?? "未知用户").slice(0, 24),
+    authorType: client.identity.type === "admin" ? "admin" : "player",
+    createdAt: now,
+    ...diceMessage,
+  };
+
+  chatMessages.push(chatMessage);
+  if (chatMessages.length > maxChatMessages) {
+    chatMessages.splice(0, chatMessages.length - maxChatMessages);
+  }
+
+  client.lastSeenAt = now;
+  broadcastChatMessage(chatMessage);
+}
+
 wss.on("connection", (socket) => {
   const clientId = randomUUID();
   const now = Date.now();
@@ -651,6 +722,11 @@ wss.on("connection", (socket) => {
 
     if (message.type === "scene:room-update") {
       handleRoomUpdate(client, message);
+      return;
+    }
+
+    if (message.type === "chat:dice") {
+      handleChatDice(client, message);
     }
   });
 

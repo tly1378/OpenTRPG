@@ -63,11 +63,83 @@
         <button id="switch-identity-button" type="button" class="tool-button subtle-button" aria-label="切换身份" data-tooltip="切换身份">
           <span data-lucide="refresh-cw" aria-hidden="true"></span>
         </button>
+        <button id="chat-toggle-button" type="button" class="tool-button subtle-button is-hidden" aria-label="打开聊天" aria-pressed="false" data-tooltip="聊天">
+          <span data-lucide="message-circle" aria-hidden="true"></span>
+        </button>
         <span id="identity-badge" class="identity-badge">未登录</span>
-        <span class="hint">右键拖动画布移动相机 · 滚轮缩放画面 · 编辑模式：背景/阻挡/角色/房间 · 主持/游玩模式：拖拽角色，双击角色检视，主持人点击门检视</span>
       </header>
 
+      <aside id="dice-panel" class="dice-panel" aria-label="骰子投掷器" hidden>
+        <div class="dice-panel-heading">
+          <div>
+            <p class="panel-eyebrow">骰子</p>
+            <h2>投骰子</h2>
+          </div>
+          <button id="dice-clear" class="dice-clear-button" type="button">清空</button>
+        </div>
+        <div id="dice-options" class="dice-options" aria-label="选择要投掷的骰子">
+          <div class="dice-control">
+            <button class="dice-adjust-button" type="button" data-die="4" data-dice-action="decrease" aria-label="减少 d4">-</button>
+            <button class="dice-option" type="button" data-die="4">d4</button>
+            <button class="dice-adjust-button" type="button" data-die="4" data-dice-action="increase" aria-label="增加 d4">+</button>
+          </div>
+          <div class="dice-control">
+            <button class="dice-adjust-button" type="button" data-die="6" data-dice-action="decrease" aria-label="减少 d6">-</button>
+            <button class="dice-option" type="button" data-die="6">d6</button>
+            <button class="dice-adjust-button" type="button" data-die="6" data-dice-action="increase" aria-label="增加 d6">+</button>
+          </div>
+          <div class="dice-control">
+            <button class="dice-adjust-button" type="button" data-die="8" data-dice-action="decrease" aria-label="减少 d8">-</button>
+            <button class="dice-option" type="button" data-die="8">d8</button>
+            <button class="dice-adjust-button" type="button" data-die="8" data-dice-action="increase" aria-label="增加 d8">+</button>
+          </div>
+          <div class="dice-control">
+            <button class="dice-adjust-button" type="button" data-die="10" data-dice-action="decrease" aria-label="减少 d10">-</button>
+            <button class="dice-option" type="button" data-die="10">d10</button>
+            <button class="dice-adjust-button" type="button" data-die="10" data-dice-action="increase" aria-label="增加 d10">+</button>
+          </div>
+          <div class="dice-control">
+            <button class="dice-adjust-button" type="button" data-die="12" data-dice-action="decrease" aria-label="减少 d12">-</button>
+            <button class="dice-option" type="button" data-die="12">d12</button>
+            <button class="dice-adjust-button" type="button" data-die="12" data-dice-action="increase" aria-label="增加 d12">+</button>
+          </div>
+          <div class="dice-control">
+            <button class="dice-adjust-button" type="button" data-die="20" data-dice-action="decrease" aria-label="减少 d20">-</button>
+            <button class="dice-option" type="button" data-die="20">d20</button>
+            <button class="dice-adjust-button" type="button" data-die="20" data-dice-action="increase" aria-label="增加 d20">+</button>
+          </div>
+          <div class="dice-control">
+            <button class="dice-adjust-button" type="button" data-die="100" data-dice-action="decrease" aria-label="减少 d100">-</button>
+            <button class="dice-option" type="button" data-die="100">d100</button>
+            <button class="dice-adjust-button" type="button" data-die="100" data-dice-action="increase" aria-label="增加 d100">+</button>
+          </div>
+        </div>
+        <label class="dice-modifier-field">
+          <span>加值</span>
+          <span class="dice-modifier-control">
+            <button id="dice-modifier-decrease" class="dice-adjust-button" type="button" aria-label="减少加值">-</button>
+            <input id="dice-modifier" type="number" inputmode="numeric" step="1" value="0" aria-label="投掷加值" />
+            <button id="dice-modifier-increase" class="dice-adjust-button" type="button" aria-label="增加加值">+</button>
+          </span>
+        </label>
+        <div id="dice-selection" class="dice-selection">点击骰子来加入投掷池</div>
+        <button id="dice-roll" class="dice-roll-button" type="button" disabled>投掷</button>
+      </aside>
+
       <div id="drop-overlay" class="drop-overlay" hidden>松开以上传图片</div>
+
+      <aside id="chat-panel" class="chat-panel" aria-label="聊天栏" aria-hidden="true">
+        <div class="chat-panel-header">
+          <div>
+            <p class="panel-eyebrow">聊天</p>
+            <h2>聊天栏</h2>
+          </div>
+          <button id="chat-close-button" class="chat-close-button" type="button" aria-label="关闭聊天">关闭</button>
+        </div>
+        <div id="chat-message-list" class="chat-message-list" aria-live="polite">
+          <div class="chat-empty">投骰结果会显示在这里。</div>
+        </div>
+      </aside>
 
       <aside id="selection-panel" class="selection-panel" aria-hidden="true">
         <div class="panel-eyebrow" id="selection-eyebrow">图片检视</div>

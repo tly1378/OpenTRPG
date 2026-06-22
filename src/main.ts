@@ -1,5 +1,17 @@
 import "./styles.css";
-import { BrickWall, DoorOpen, Eraser, EyeOff, LandPlot, RefreshCw, Upload, UserMinus, UserPlus, createIcons } from "lucide";
+import {
+  BrickWall,
+  DoorOpen,
+  Eraser,
+  EyeOff,
+  LandPlot,
+  MessageCircle,
+  RefreshCw,
+  Upload,
+  UserMinus,
+  UserPlus,
+  createIcons,
+} from "lucide";
 import { GRID_CELL_SIZE, TOKEN_STEP_ANIMATION_MS } from "./constants";
 import { mustGetCanvasContext, mustQuery } from "./dom";
 import { add, rotate } from "./geometry";
@@ -56,6 +68,7 @@ import type {
   SceneToken,
   Vector2,
   WallEdgeType,
+  ChatMessage,
 } from "./types";
 import { createViewport } from "./viewport";
 
@@ -76,8 +89,12 @@ const roomModeButton = mustQuery<HTMLButtonElement>("#room-mode-button");
 const clearWallsButton = mustQuery<HTMLButtonElement>("#clear-walls-button");
 const logicMapVisibilityButton = mustQuery<HTMLButtonElement>("#logic-map-visibility-button");
 const switchIdentityButton = mustQuery<HTMLButtonElement>("#switch-identity-button");
+const chatToggleButton = mustQuery<HTMLButtonElement>("#chat-toggle-button");
 const identityBadge = mustQuery<HTMLSpanElement>("#identity-badge");
 const dropOverlay = mustQuery<HTMLDivElement>("#drop-overlay");
+const chatPanel = mustQuery<HTMLElement>("#chat-panel");
+const chatCloseButton = mustQuery<HTMLButtonElement>("#chat-close-button");
+const chatMessageList = mustQuery<HTMLDivElement>("#chat-message-list");
 const selectionPanel = mustQuery<HTMLDivElement>("#selection-panel");
 const selectionEyebrow = mustQuery<HTMLDivElement>("#selection-eyebrow");
 const selectionTitle = mustQuery<HTMLDivElement>("#selection-title");
@@ -109,6 +126,15 @@ const avatarEditorStage = mustQuery<HTMLDivElement>("#avatar-editor-stage");
 const avatarEditorImage = mustQuery<HTMLImageElement>("#avatar-editor-image");
 const cancelAvatarEditButton = mustQuery<HTMLButtonElement>("#cancel-avatar-edit");
 const saveAvatarEditButton = mustQuery<HTMLButtonElement>("#save-avatar-edit");
+const dicePanel = mustQuery<HTMLElement>("#dice-panel");
+const diceOptionButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".dice-option"));
+const diceAdjustButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".dice-adjust-button[data-die]"));
+const diceSelection = mustQuery<HTMLDivElement>("#dice-selection");
+const diceRollButton = mustQuery<HTMLButtonElement>("#dice-roll");
+const diceClearButton = mustQuery<HTMLButtonElement>("#dice-clear");
+const diceModifierInput = mustQuery<HTMLInputElement>("#dice-modifier");
+const diceModifierDecreaseButton = mustQuery<HTMLButtonElement>("#dice-modifier-decrease");
+const diceModifierIncreaseButton = mustQuery<HTMLButtonElement>("#dice-modifier-increase");
 
 const ctx = mustGetCanvasContext(canvas);
 createIcons({
@@ -118,6 +144,7 @@ createIcons({
     Eraser,
     EyeOff,
     LandPlot,
+    MessageCircle,
     RefreshCw,
     Upload,
     UserMinus,
@@ -155,6 +182,7 @@ const blockedVerticalEdges = new Set<string>();
 const blockedHorizontalEdges = new Set<string>();
 const sceneDoors = new Map<string, SceneDoor>();
 const sceneRooms: SceneRoom[] = [];
+const chatMessages: ChatMessage[] = [];
 
 let selectedImageId: string | null = null;
 let selectedTokenId: string | null = null;
@@ -176,7 +204,11 @@ let previewPath: Cell[] = [];
 let previewRoomCells: Cell[] = [];
 let imageSnapshotVersion = 0;
 let tokenNameEditing = false;
+let isChatPanelOpen = false;
 const pendingTokenNames = new Map<string, string>();
+const diceSides = [4, 6, 8, 10, 12, 20, 100] as const;
+type DiceSides = (typeof diceSides)[number];
+const selectedDice = new Map<DiceSides, number>();
 let avatarEditor:
   | {
       tokenId: string;
@@ -207,6 +239,7 @@ const networkClient = new NetworkClient(
     renderLatencyPanel();
   },
   applySceneSnapshot,
+  applyChatMessages,
 );
 
 function formatLatency(latencyMs: number | null): string {
@@ -265,6 +298,229 @@ function renderLatencyPanel(): void {
 
   latencyPanel.replaceChildren(title, status, list);
   latencyPanel.hidden = false;
+}
+
+function formatChatTime(createdAt: number): string {
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(createdAt));
+}
+
+function applyChatMessages(messages: ChatMessage[], mode: "replace" | "append"): void {
+  if (mode === "replace") {
+    chatMessages.splice(0, chatMessages.length, ...messages);
+  } else {
+    const knownMessageIds = new Set(chatMessages.map((message) => message.id));
+    chatMessages.push(...messages.filter((message) => !knownMessageIds.has(message.id)));
+  }
+
+  chatMessages.sort((a, b) => a.createdAt - b.createdAt);
+  renderChatPanel();
+}
+
+function renderChatPanel(): void {
+  const canShowChat = isPlayMode();
+
+  if (!canShowChat) {
+    isChatPanelOpen = false;
+  }
+
+  chatToggleButton.classList.toggle("is-hidden", !canShowChat);
+  chatToggleButton.classList.toggle("is-active", canShowChat && isChatPanelOpen);
+  chatToggleButton.disabled = !canShowChat;
+  chatToggleButton.setAttribute("aria-pressed", String(canShowChat && isChatPanelOpen));
+  chatToggleButton.setAttribute("aria-label", isChatPanelOpen ? "关闭聊天" : "打开聊天");
+  chatPanel.hidden = !canShowChat;
+  chatPanel.classList.toggle("is-open", canShowChat && isChatPanelOpen);
+  chatPanel.setAttribute("aria-hidden", String(!canShowChat || !isChatPanelOpen));
+
+  if (chatMessages.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "chat-empty";
+    empty.textContent = "投骰结果会显示在这里。";
+    chatMessageList.replaceChildren(empty);
+    return;
+  }
+
+  const elements = chatMessages.map((message) => {
+    const item = document.createElement("article");
+    const meta = document.createElement("div");
+    const author = document.createElement("span");
+    const time = document.createElement("span");
+    const formula = document.createElement("div");
+    const total = document.createElement("div");
+    const detail = document.createElement("div");
+
+    item.className = "chat-message";
+    meta.className = "chat-message-meta";
+    author.className = "chat-message-author";
+    formula.className = "chat-dice-formula";
+    total.className = "chat-dice-total";
+    detail.className = "chat-dice-detail";
+    author.textContent = message.authorName;
+    time.textContent = formatChatTime(message.createdAt);
+    formula.textContent = message.formula;
+    total.textContent = `总和 ${message.total}`;
+    detail.textContent = message.detail;
+    meta.append(author, time);
+    item.append(meta, formula, total, detail);
+    return item;
+  });
+
+  chatMessageList.replaceChildren(...elements);
+  requestAnimationFrame(() => {
+    chatMessageList.scrollTop = chatMessageList.scrollHeight;
+  });
+}
+
+function setChatPanelOpen(open: boolean): void {
+  isChatPanelOpen = open && isPlayMode();
+  renderChatPanel();
+}
+
+function isDiceSides(value: number): value is DiceSides {
+  return diceSides.includes(value as DiceSides);
+}
+
+function parseDiceButton(button: HTMLButtonElement): DiceSides | null {
+  const sides = Number(button.dataset.die);
+  return isDiceSides(sides) ? sides : null;
+}
+
+function canUseDicePanel(): boolean {
+  return isLoggedIn() && appMode === "play";
+}
+
+function getDiceModifier(): number {
+  const value = Number(diceModifierInput.value);
+  return Number.isFinite(value) ? Math.trunc(value) : 0;
+}
+
+function formatDiceModifier(modifier: number): string | null {
+  if (modifier === 0) {
+    return null;
+  }
+
+  return modifier > 0 ? `+ ${modifier}` : `- ${Math.abs(modifier)}`;
+}
+
+function formatDiceSelection(): string {
+  const parts = diceSides
+    .map((sides) => {
+      const count = selectedDice.get(sides) ?? 0;
+      return count > 0 ? `${count}d${sides}` : null;
+    })
+    .filter((part): part is string => part !== null);
+  const modifier = formatDiceModifier(getDiceModifier());
+
+  if (parts.length === 0) {
+    return "点击骰子来加入投掷池";
+  }
+
+  return modifier === null ? parts.join(" + ") : `${parts.join(" + ")} ${modifier}`;
+}
+
+function renderDicePanel(): void {
+  dicePanel.hidden = !canUseDicePanel();
+
+  for (const button of diceOptionButtons) {
+    const sides = parseDiceButton(button);
+    const count = sides === null ? 0 : (selectedDice.get(sides) ?? 0);
+
+    button.classList.toggle("is-selected", count > 0);
+
+    if (sides === null) {
+      continue;
+    }
+
+    if (count === 0) {
+      button.textContent = `d${sides}`;
+      continue;
+    }
+
+    const countElement = document.createElement("span");
+    const sidesElement = document.createElement("span");
+    countElement.className = "dice-option-count";
+    sidesElement.textContent = `d${sides}`;
+    countElement.textContent = String(count);
+    button.replaceChildren(countElement, sidesElement);
+  }
+
+  for (const button of diceAdjustButtons) {
+    const sides = parseDiceButton(button);
+    const count = sides === null ? 0 : (selectedDice.get(sides) ?? 0);
+    button.disabled = button.dataset.diceAction === "decrease" && count === 0;
+  }
+
+  diceSelection.textContent = formatDiceSelection();
+  diceRollButton.disabled = selectedDice.size === 0;
+}
+
+function changeDieSelection(sides: DiceSides, delta: number): void {
+  const nextCount = Math.max(0, (selectedDice.get(sides) ?? 0) + delta);
+
+  if (nextCount === 0) {
+    selectedDice.delete(sides);
+  } else {
+    selectedDice.set(sides, nextCount);
+  }
+
+  renderDicePanel();
+}
+
+function clearDiceSelection(): void {
+  selectedDice.clear();
+  diceModifierInput.value = "0";
+  renderDicePanel();
+}
+
+function changeDiceModifier(delta: number): void {
+  diceModifierInput.value = String(getDiceModifier() + delta);
+  renderDicePanel();
+}
+
+function rollDie(sides: DiceSides): number {
+  return Math.floor(Math.random() * sides) + 1;
+}
+
+function rollSelectedDice(): void {
+  if (selectedDice.size === 0) {
+    return;
+  }
+
+  let total = 0;
+  const details: string[] = [];
+  const modifier = getDiceModifier();
+  const formula = formatDiceSelection();
+
+  for (const sides of diceSides) {
+    const count = selectedDice.get(sides) ?? 0;
+
+    if (count === 0) {
+      continue;
+    }
+
+    const rolls = Array.from({ length: count }, () => rollDie(sides));
+    const subtotal = rolls.reduce((sum, roll) => sum + roll, 0);
+    total += subtotal;
+    details.push(`${count}d${sides}: ${rolls.join(", ")}`);
+  }
+
+  total += modifier;
+
+  if (modifier !== 0) {
+    details.push(`加值: ${modifier > 0 ? "+" : ""}${modifier}`);
+  }
+
+  networkClient.sendDiceChatMessage({
+    kind: "dice",
+    formula,
+    total,
+    detail: details.join(" · "),
+  });
+  setChatPanelOpen(true);
+  clearDiceSelection();
 }
 
 function getSelectedImage(): SceneImage | null {
@@ -912,6 +1168,7 @@ function setAppMode(nextMode: AppMode): void {
     selectedTokenId = null;
     inspectedTokenId = null;
     tokenNameEditing = false;
+    isChatPanelOpen = false;
   }
 
   if (!canInspectDoor()) {
@@ -1013,6 +1270,8 @@ function updateModeControls(): void {
       isAdmin: isAdmin(),
     },
   );
+  renderDicePanel();
+  renderChatPanel();
 }
 
 function addTokenAtCell(cell: Cell): void {
@@ -1807,6 +2066,29 @@ layerUpButton.addEventListener("click", () => moveLayer("up"));
 layerDownButton.addEventListener("click", () => moveLayer("down"));
 layerTopButton.addEventListener("click", () => moveLayer("top"));
 layerBottomButton.addEventListener("click", () => moveLayer("bottom"));
+diceOptionButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const sides = parseDiceButton(button);
+
+    if (sides !== null) {
+      changeDieSelection(sides, 1);
+    }
+  });
+});
+diceAdjustButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const sides = parseDiceButton(button);
+
+    if (sides !== null) {
+      changeDieSelection(sides, button.dataset.diceAction === "decrease" ? -1 : 1);
+    }
+  });
+});
+diceRollButton.addEventListener("click", rollSelectedDice);
+diceClearButton.addEventListener("click", () => clearDiceSelection());
+diceModifierInput.addEventListener("input", renderDicePanel);
+diceModifierDecreaseButton.addEventListener("click", () => changeDiceModifier(-1));
+diceModifierIncreaseButton.addEventListener("click", () => changeDiceModifier(1));
 resetSizeButton.addEventListener("click", resetSelectedImageSize);
 editTokenNameButton.addEventListener("click", startTokenNameEditing);
 tokenNameInput.addEventListener("input", () => {
@@ -1921,6 +2203,12 @@ saveAvatarEditButton.addEventListener("click", saveAvatarEditor);
 switchIdentityButton.addEventListener("click", () => {
   showIdentityScreen();
 });
+chatToggleButton.addEventListener("click", () => {
+  setChatPanelOpen(!isChatPanelOpen);
+});
+chatCloseButton.addEventListener("click", () => {
+  setChatPanelOpen(false);
+});
 
 window.addEventListener("resize", () => {
   resizeCanvas();
@@ -1929,5 +2217,7 @@ window.addEventListener("resize", () => {
 
 renderIdentityList();
 showIdentityScreen();
+renderDicePanel();
+renderChatPanel();
 resizeCanvas();
 requestAnimationFrame(tick);

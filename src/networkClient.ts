@@ -1,4 +1,4 @@
-import type { Identity, SceneDoor, SceneImageSnapshot, SceneRoom, SceneToken, WallEdgeType } from "./types";
+import type { ChatMessage, Identity, SceneDoor, SceneImageSnapshot, SceneRoom, SceneToken, WallEdgeType } from "./types";
 
 export type ConnectionStatus = "offline" | "connecting" | "online";
 
@@ -51,6 +51,16 @@ type NetworkMessage =
       doors?: SceneDoor[];
       rooms?: SceneRoom[];
       serverTime: number;
+    }
+  | {
+      type: "chat:history";
+      messages: ChatMessage[];
+      serverTime: number;
+    }
+  | {
+      type: "chat:message";
+      message: ChatMessage;
+      serverTime: number;
     };
 
 const serverUrl =
@@ -70,6 +80,7 @@ export class NetworkClient {
   constructor(
     private readonly onChange: (snapshot: NetworkSnapshot) => void,
     private readonly onSceneChange: (snapshot: SceneSnapshot) => void,
+    private readonly onChatMessages: (messages: ChatMessage[], mode: "replace" | "append") => void,
   ) {}
 
   connect(identity: NetworkIdentity | null = null): void {
@@ -173,6 +184,13 @@ export class NetworkClient {
     });
   }
 
+  sendDiceChatMessage(message: Pick<ChatMessage, "kind" | "formula" | "total" | "detail">): void {
+    this.send({
+      type: "chat:dice",
+      message,
+    });
+  }
+
   disconnect(): void {
     this.identity = null;
     this.clients = [];
@@ -261,6 +279,16 @@ export class NetworkClient {
         doors: message.doors ?? [],
         rooms: message.rooms ?? [],
       });
+      return;
+    }
+
+    if (message.type === "chat:history") {
+      this.onChatMessages(message.messages, "replace");
+      return;
+    }
+
+    if (message.type === "chat:message") {
+      this.onChatMessages([message.message], "append");
     }
   }
 
