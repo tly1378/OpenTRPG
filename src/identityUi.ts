@@ -1,4 +1,4 @@
-import type { AppMode, EditMode, Identity, SceneToken } from "./types";
+import type { AppMode, EditMode, Identity, SceneCharacter } from "./types";
 
 export const HOST_IDENTITY: Identity = { type: "admin", id: "host", name: "主持人" };
 
@@ -10,17 +10,16 @@ const MODE_LABELS: Record<AppMode, string> = {
 const EDIT_MODE_LABELS: Record<EditMode, string> = {
   background: "背景",
   blocking: "阻挡",
-  tokens: "角色",
   rooms: "房间",
 };
 
-export function buildIdentities(tokens: SceneToken[]): Identity[] {
+export function buildIdentities(characters: SceneCharacter[]): Identity[] {
   return [
     HOST_IDENTITY,
-    ...tokens.map((token) => ({
+    ...characters.map((character) => ({
       type: "player" as const,
-      id: token.id,
-      name: token.name,
+      id: character.id,
+      name: character.name,
     })),
   ];
 }

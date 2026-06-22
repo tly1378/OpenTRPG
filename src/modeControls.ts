@@ -7,8 +7,6 @@ type ModeControls = {
   editModeSelect: HTMLSelectElement;
   uploadInput: HTMLInputElement;
   uploadButton: HTMLLabelElement;
-  addTokenButton: HTMLButtonElement;
-  deleteTokenButton: HTMLButtonElement;
   wallModeButton: HTMLButtonElement;
   doorModeButton: HTMLButtonElement;
   roomModeButton: HTMLButtonElement;
@@ -37,7 +35,6 @@ export function updateModeControls(
   const isEditing = isLoggedIn && isAdmin && appMode === "edit";
   const isEditingBackground = isEditing && editMode === "background";
   const isEditingBlocking = isEditing && editMode === "blocking";
-  const isEditingTokens = isEditing && editMode === "tokens";
   const isEditingRooms = isEditing && editMode === "rooms";
   const isPlaying = isLoggedIn && appMode === "play";
 
@@ -51,10 +48,6 @@ export function updateModeControls(
   controls.uploadInput.disabled = !isEditingBackground;
   controls.uploadButton.classList.toggle("is-disabled", controls.uploadInput.disabled);
   controls.uploadButton.classList.toggle("is-hidden", !isEditingBackground);
-  controls.addTokenButton.disabled = !isEditingTokens;
-  controls.addTokenButton.classList.toggle("is-hidden", !isEditingTokens);
-  controls.deleteTokenButton.disabled = !isEditingTokens;
-  controls.deleteTokenButton.classList.toggle("is-hidden", !isEditingTokens);
   controls.wallModeButton.disabled = !isEditingBlocking;
   controls.wallModeButton.classList.toggle("is-hidden", !isEditingBlocking);
   controls.doorModeButton.disabled = !isEditingBlocking;
@@ -75,13 +68,9 @@ export function updateModeControls(
   controls.layerTopButton.disabled = !isEditingBackground;
   controls.layerBottomButton.disabled = !isEditingBackground;
 
-  controls.addTokenButton.classList.toggle("is-active", isEditingTokens && logicTool === "add-token");
-  controls.deleteTokenButton.classList.toggle("is-active", isEditingTokens && logicTool === "delete-token");
   controls.wallModeButton.classList.toggle("is-active", isEditingBlocking && logicTool === "wall");
   controls.doorModeButton.classList.toggle("is-active", isEditingBlocking && logicTool === "door");
   controls.roomModeButton.classList.toggle("is-active", isEditingRooms);
-  controls.addTokenButton.setAttribute("aria-pressed", String(isEditingTokens && logicTool === "add-token"));
-  controls.deleteTokenButton.setAttribute("aria-pressed", String(isEditingTokens && logicTool === "delete-token"));
   controls.wallModeButton.setAttribute("aria-pressed", String(isEditingBlocking && logicTool === "wall"));
   controls.doorModeButton.setAttribute("aria-pressed", String(isEditingBlocking && logicTool === "door"));
   controls.roomModeButton.setAttribute("aria-pressed", String(isEditingRooms));

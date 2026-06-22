@@ -8,6 +8,7 @@ const avatarOffsetLimit = 10;
 
 const clients = new Map();
 const sceneImages = [];
+const sceneCharacters = [];
 const sceneTokens = [];
 const blockedVerticalEdges = new Set();
 const blockedHorizontalEdges = new Set();
@@ -62,6 +63,7 @@ function sceneSnapshotPayload(serverTime = Date.now()) {
   return {
     type: "scene:snapshot",
     images: sceneImages,
+    characters: sceneCharacters,
     tokens: sceneTokens,
     blockedVerticalEdges: [...blockedVerticalEdges],
     blockedHorizontalEdges: [...blockedHorizontalEdges],
@@ -266,14 +268,14 @@ function normalizeTokenAvatarFields(token) {
   };
 }
 
-function normalizeSceneToken(token) {
-  if (!token || typeof token !== "object" || !isFiniteCell(token.cell)) {
+function normalizeSceneCharacter(character) {
+  if (!character || typeof character !== "object") {
     return null;
   }
 
-  const id = String(token.id ?? "");
-  const name = String(token.name ?? "");
-  const color = String(token.color ?? "");
+  const id = String(character.id ?? "");
+  const name = String(character.name ?? "");
+  const color = String(character.color ?? "");
 
   if (!id || !name || !color) {
     return null;
@@ -283,17 +285,55 @@ function normalizeSceneToken(token) {
     id,
     name,
     color,
+    ...normalizeTokenAvatarFields(character),
+  };
+}
+
+function normalizeSceneToken(token) {
+  if (!token || typeof token !== "object" || !isFiniteCell(token.cell)) {
+    return null;
+  }
+
+  const character = normalizeSceneCharacter(token);
+  if (!character) {
+    return null;
+  }
+
+  return {
+    ...character,
     cell: {
       x: token.cell.x,
       y: token.cell.y,
     },
-    ...normalizeTokenAvatarFields(token),
   };
 }
 
 function normalizeTokenName(name) {
   const normalizedName = String(name ?? "").trim();
   return normalizedName.length > 0 ? normalizedName.slice(0, 24) : null;
+}
+
+function upsertSceneCharacter(character) {
+  const existingCharacterIndex = sceneCharacters.findIndex((candidate) => candidate.id === character.id);
+  if (existingCharacterIndex === -1) {
+    sceneCharacters.push(character);
+  } else {
+    sceneCharacters[existingCharacterIndex] = character;
+  }
+}
+
+function syncTokenFromCharacter(character) {
+  const token = sceneTokens.find((candidate) => candidate.id === character.id);
+  if (!token) {
+    return;
+  }
+
+  Object.assign(token, character, { cell: token.cell });
+}
+
+function syncCharacterFromToken(token) {
+  const { cell: _cell, ...character } = token;
+  upsertSceneCharacter(character);
 }
 
 function normalizeDiceChatMessage(message) {
@@ -427,6 +467,7 @@ function handleSceneTokenAdd(client, message) {
     return;
   }
 
+  syncCharacterFromToken(token);
   const existingTokenIndex = sceneTokens.findIndex((candidate) => candidate.id === token.id);
   if (existingTokenIndex === -1) {
     sceneTokens.push(token);
@@ -434,6 +475,61 @@ function handleSceneTokenAdd(client, message) {
     sceneTokens[existingTokenIndex] = token;
   }
 
+  broadcastSceneSnapshot();
+}
+
+function handleSceneCharacterAdd(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  const character = normalizeSceneCharacter(message.character);
+  if (!character || sceneCharacters.some((candidate) => candidate.id === character.id)) {
+    return;
+  }
+
+  sceneCharacters.push(character);
+  client.lastSeenAt = Date.now();
+  broadcastSceneSnapshot();
+}
+
+function handleSceneCharacterUpdate(client, message) {
+  const incomingCharacter = message.character;
+  if (!incomingCharacter || typeof incomingCharacter !== "object") {
+    return;
+  }
+
+  const character = sceneCharacters.find((candidate) => candidate.id === String(incomingCharacter.id ?? ""));
+  const name = normalizeTokenName(incomingCharacter.name);
+  if (!character || !name || (client.identity.type !== "admin" && client.identity.id !== character.id)) {
+    return;
+  }
+
+  character.name = name;
+  Object.assign(character, normalizeTokenAvatarFields(incomingCharacter));
+  syncTokenFromCharacter(character);
+  client.lastSeenAt = Date.now();
+  syncClientIdentityForToken(character);
+  broadcastSceneSnapshot();
+}
+
+function handleSceneCharacterDelete(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  const characterId = String(message.characterId ?? "");
+  const characterIndex = sceneCharacters.findIndex((candidate) => candidate.id === characterId);
+  if (characterIndex === -1) {
+    return;
+  }
+
+  sceneCharacters.splice(characterIndex, 1);
+  const tokenIndex = sceneTokens.findIndex((candidate) => candidate.id === characterId);
+  if (tokenIndex !== -1) {
+    sceneTokens.splice(tokenIndex, 1);
+  }
+  client.lastSeenAt = Date.now();
   broadcastSceneSnapshot();
 }
 
@@ -554,9 +650,11 @@ function handleSceneTokenMove(client, message) {
   const name = normalizeTokenName(message.name);
   if (name && token.name !== name) {
     token.name = name;
+    syncCharacterFromToken(token);
     syncClientIdentityForToken(token);
   }
   Object.assign(token, normalizeTokenAvatarFields(message));
+  syncCharacterFromToken(token);
 
   const now = Date.now();
   client.lastSeenAt = now;
@@ -590,6 +688,7 @@ function handleSceneTokenUpdate(client, message) {
 
   token.name = name;
   Object.assign(token, normalizeTokenAvatarFields(incomingToken));
+  syncCharacterFromToken(token);
   client.lastSeenAt = Date.now();
   syncClientIdentityForToken(token);
   broadcastSceneSnapshot();
@@ -740,6 +839,21 @@ wss.on("connection", (socket) => {
 
     if (message.type === "scene:token-add") {
       handleSceneTokenAdd(client, message);
+      return;
+    }
+
+    if (message.type === "scene:character-add") {
+      handleSceneCharacterAdd(client, message);
+      return;
+    }
+
+    if (message.type === "scene:character-update") {
+      handleSceneCharacterUpdate(client, message);
+      return;
+    }
+
+    if (message.type === "scene:character-delete") {
+      handleSceneCharacterDelete(client, message);
       return;
     }
 

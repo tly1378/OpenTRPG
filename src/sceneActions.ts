@@ -1,5 +1,5 @@
 import { TOKEN_COLORS } from "./constants";
-import type { Cell, SceneImage, SceneToken } from "./types";
+import type { Cell, SceneCharacter, SceneImage, SceneToken } from "./types";
 
 export function normalizeImageZIndexes(images: SceneImage[]): number {
   images
@@ -39,12 +39,18 @@ export function createSceneImage(
   };
 }
 
-export function createSceneToken(cell: Cell, tokenIndex: number): SceneToken {
+export function createSceneCharacter(tokenIndex: number): SceneCharacter {
   return {
     id: crypto.randomUUID(),
     name: `P${tokenIndex}`,
-    cell,
     color: TOKEN_COLORS[(tokenIndex - 1) % TOKEN_COLORS.length],
+  };
+}
+
+export function createSceneToken(character: SceneCharacter, cell: Cell): SceneToken {
+  return {
+    ...character,
+    cell,
   };
 }
 

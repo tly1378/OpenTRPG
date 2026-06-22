@@ -1,4 +1,15 @@
-import type { Cell, ChatMessage, DiceChatMessage, Identity, SceneDoor, SceneImageSnapshot, SceneRoom, SceneToken, WallEdgeType } from "./types";
+import type {
+  Cell,
+  ChatMessage,
+  DiceChatMessage,
+  Identity,
+  SceneCharacter,
+  SceneDoor,
+  SceneImageSnapshot,
+  SceneRoom,
+  SceneToken,
+  WallEdgeType,
+} from "./types";
 
 export type ConnectionStatus = "offline" | "connecting" | "online";
 
@@ -20,6 +31,7 @@ export type NetworkSnapshot = {
 
 export type SceneSnapshot = {
   images: SceneImageSnapshot[];
+  characters: SceneCharacter[];
   tokens: SceneToken[];
   blockedVerticalEdges: string[];
   blockedHorizontalEdges: string[];
@@ -45,6 +57,7 @@ type NetworkMessage =
   | {
       type: "scene:snapshot";
       images?: SceneImageSnapshot[];
+      characters?: SceneCharacter[];
       tokens: SceneToken[];
       blockedVerticalEdges?: string[];
       blockedHorizontalEdges?: string[];
@@ -98,6 +111,27 @@ export class NetworkClient {
     this.send({
       type: "scene:token-add",
       token,
+    });
+  }
+
+  sendCharacterAdded(character: SceneCharacter): void {
+    this.send({
+      type: "scene:character-add",
+      character,
+    });
+  }
+
+  sendCharacterUpdated(character: SceneCharacter): void {
+    this.send({
+      type: "scene:character-update",
+      character,
+    });
+  }
+
+  sendCharacterDeleted(characterId: string): void {
+    this.send({
+      type: "scene:character-delete",
+      characterId,
     });
   }
 
@@ -274,6 +308,7 @@ export class NetworkClient {
     if (message.type === "scene:snapshot") {
       this.onSceneChange({
         images: message.images ?? [],
+        characters: message.characters ?? message.tokens,
         tokens: message.tokens,
         blockedVerticalEdges: message.blockedVerticalEdges ?? [],
         blockedHorizontalEdges: message.blockedHorizontalEdges ?? [],

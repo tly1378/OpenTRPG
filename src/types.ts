@@ -15,8 +15,8 @@ export type ClientPointEvent = {
 
 export type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 export type AppMode = "edit" | "play";
-export type EditMode = "background" | "blocking" | "tokens" | "rooms";
-export type LogicTool = "add-token" | "delete-token" | "wall" | "door" | "room";
+export type EditMode = "background" | "blocking" | "rooms";
+export type LogicTool = "wall" | "door" | "room";
 export type WallEdgeType = "vertical" | "horizontal";
 
 export type GridIntersection = {
@@ -59,15 +59,18 @@ export type SceneImage = {
 
 export type SceneImageSnapshot = Omit<SceneImage, "image">;
 
-export type SceneToken = {
+export type SceneCharacter = {
   id: string;
   name: string;
-  cell: Cell;
   color: string;
   avatarSrc?: string;
   avatarScale?: number;
   avatarOffsetX?: number;
   avatarOffsetY?: number;
+};
+
+export type SceneToken = SceneCharacter & {
+  cell: Cell;
 };
 
 export type SceneDoor = {

@@ -7,9 +7,9 @@ import {
   LandPlot,
   MessageCircle,
   RefreshCw,
+  Trash2,
   Upload,
-  UserMinus,
-  UserPlus,
+  Users,
   createIcons,
 } from "lucide";
 import { GRID_CELL_SIZE, TOKEN_STEP_ANIMATION_MS } from "./constants";
@@ -51,7 +51,7 @@ import {
 import { updateModeControls as applyModeControls } from "./modeControls";
 import { NetworkClient, type NetworkSnapshot, type SceneSnapshot } from "./networkClient";
 import { renderScene } from "./renderer";
-import { createSceneImage, createSceneToken, moveImageLayer, normalizeImageZIndexes, resetImageSize } from "./sceneActions";
+import { createSceneCharacter, createSceneImage, createSceneToken, moveImageLayer, normalizeImageZIndexes, resetImageSize } from "./sceneActions";
 import type {
   AppMode,
   Cell,
@@ -61,6 +61,7 @@ import type {
   LogicTool,
   MovingToken,
   SceneDoor,
+  SceneCharacter,
   SceneImage,
   SceneImageSnapshot,
   SceneRoom,
@@ -82,8 +83,6 @@ const editModeSelectLabel = mustQuery<HTMLLabelElement>(".edit-mode-select-label
 const editModeSelect = mustQuery<HTMLSelectElement>("#edit-mode-select");
 const uploadButton = mustQuery<HTMLLabelElement>("#upload-button");
 const uploadInput = mustQuery<HTMLInputElement>("#image-upload");
-const addTokenButton = mustQuery<HTMLButtonElement>("#add-token-button");
-const deleteTokenButton = mustQuery<HTMLButtonElement>("#delete-token-button");
 const wallModeButton = mustQuery<HTMLButtonElement>("#wall-mode-button");
 const doorModeButton = mustQuery<HTMLButtonElement>("#door-mode-button");
 const roomModeButton = mustQuery<HTMLButtonElement>("#room-mode-button");
@@ -91,11 +90,16 @@ const clearWallsButton = mustQuery<HTMLButtonElement>("#clear-walls-button");
 const logicMapVisibilityButton = mustQuery<HTMLButtonElement>("#logic-map-visibility-button");
 const switchIdentityButton = mustQuery<HTMLButtonElement>("#switch-identity-button");
 const chatToggleButton = mustQuery<HTMLButtonElement>("#chat-toggle-button");
+const characterToggleButton = mustQuery<HTMLButtonElement>("#character-toggle-button");
 const identityBadge = mustQuery<HTMLSpanElement>("#identity-badge");
 const dropOverlay = mustQuery<HTMLDivElement>("#drop-overlay");
 const chatPanel = mustQuery<HTMLElement>("#chat-panel");
 const chatCloseButton = mustQuery<HTMLButtonElement>("#chat-close-button");
 const chatMessageList = mustQuery<HTMLDivElement>("#chat-message-list");
+const characterPanel = mustQuery<HTMLElement>("#character-panel");
+const characterCloseButton = mustQuery<HTMLButtonElement>("#character-close-button");
+const addCharacterButton = mustQuery<HTMLButtonElement>("#add-character-button");
+const characterList = mustQuery<HTMLDivElement>("#character-list");
 const selectionPanel = mustQuery<HTMLDivElement>("#selection-panel");
 const selectionEyebrow = mustQuery<HTMLDivElement>("#selection-eyebrow");
 const selectionTitle = mustQuery<HTMLDivElement>("#selection-title");
@@ -110,7 +114,6 @@ const tokenSelectionForm = mustQuery<HTMLFormElement>("#token-selection-form");
 const tokenNameDisplay = mustQuery<HTMLDivElement>("#token-name-display");
 const tokenNameValue = mustQuery<HTMLSpanElement>("#token-name-value");
 const editTokenNameButton = mustQuery<HTMLButtonElement>("#edit-token-name");
-const tokenNameField = mustQuery<HTMLLabelElement>("#token-name-field");
 const tokenNameInput = mustQuery<HTMLInputElement>("#token-name-input");
 const avatarUploadButton = mustQuery<HTMLLabelElement>("#avatar-upload-button");
 const avatarUploadInput = mustQuery<HTMLInputElement>("#avatar-upload-input");
@@ -118,6 +121,10 @@ const avatarAdjustControls = mustQuery<HTMLDivElement>("#avatar-adjust-controls"
 const editAvatarButton = mustQuery<HTMLButtonElement>("#edit-avatar");
 const resetAvatarAdjustmentButton = mustQuery<HTMLButtonElement>("#reset-avatar-adjustment");
 const tokenPanelHelp = mustQuery<HTMLParagraphElement>("#token-panel-help");
+const tokenInspectorOverlay = mustQuery<HTMLElement>("#token-inspector-overlay");
+const closeTokenInspectorButton = mustQuery<HTMLButtonElement>("#close-token-inspector");
+const tokenInstanceActions = mustQuery<HTMLDivElement>("#token-instance-actions");
+const deleteTokenInstanceButton = mustQuery<HTMLButtonElement>("#delete-token-instance");
 const doorSelectionForm = mustQuery<HTMLFormElement>("#door-selection-form");
 const doorBlocksMovementInput = mustQuery<HTMLInputElement>("#door-blocks-movement-input");
 const roomSelectionForm = mustQuery<HTMLFormElement>("#room-selection-form");
@@ -146,9 +153,9 @@ createIcons({
     LandPlot,
     MessageCircle,
     RefreshCw,
+    Trash2,
     Upload,
-    UserMinus,
-    UserPlus,
+    Users,
   },
   nameAttr: "data-lucide",
   attrs: {
@@ -176,6 +183,7 @@ const pointer = {
 };
 
 const sceneImages: SceneImage[] = [];
+const sceneCharacters: SceneCharacter[] = [];
 const sceneTokens: SceneToken[] = [];
 const tokenAvatarImages = new Map<string, { src: string; image: HTMLImageElement }>();
 const blockedVerticalEdges = new Set<string>();
@@ -186,7 +194,7 @@ const chatMessages: ChatMessage[] = [];
 
 let selectedImageId: string | null = null;
 let selectedTokenId: string | null = null;
-let inspectedTokenId: string | null = null;
+let inspectedCharacterId: string | null = null;
 let selectedDoorId: string | null = null;
 let selectedRoomId: string | null = null;
 let currentIdentity: Identity | null = null;
@@ -208,6 +216,7 @@ let previewWallTargetBlocked = true;
 let imageSnapshotVersion = 0;
 let tokenNameEditing = false;
 let isChatPanelOpen = false;
+let isCharacterPanelOpen = false;
 const pendingTokenNames = new Map<string, string>();
 const diceSides = [4, 6, 8, 10, 12, 20, 100] as const;
 type DiceSides = (typeof diceSides)[number];
@@ -400,6 +409,122 @@ function setChatPanelOpen(open: boolean): void {
   renderChatPanel();
 }
 
+function renderCharacterPanel(): void {
+  const canShowCharacters = isAdmin();
+
+  if (!canShowCharacters) {
+    isCharacterPanelOpen = false;
+  }
+
+  characterToggleButton.classList.toggle("is-hidden", !canShowCharacters);
+  characterToggleButton.classList.toggle("is-active", canShowCharacters && isCharacterPanelOpen);
+  characterToggleButton.disabled = !canShowCharacters;
+  characterToggleButton.setAttribute("aria-pressed", String(canShowCharacters && isCharacterPanelOpen));
+  characterToggleButton.setAttribute("aria-label", isCharacterPanelOpen ? "关闭角色管理" : "打开角色管理");
+  characterPanel.hidden = !canShowCharacters;
+  characterPanel.classList.toggle("is-open", canShowCharacters && isCharacterPanelOpen);
+  characterPanel.setAttribute("aria-hidden", String(!canShowCharacters || !isCharacterPanelOpen));
+  addCharacterButton.disabled = !canShowCharacters;
+
+  if (sceneCharacters.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "character-empty";
+    empty.textContent = "还没有角色。";
+    characterList.replaceChildren(empty);
+    return;
+  }
+
+  const elements = sceneCharacters.map((character) => {
+    const row = document.createElement("div");
+    const entry = document.createElement("button");
+    const avatar = document.createElement("span");
+    const text = document.createElement("span");
+    const name = document.createElement("span");
+    const status = document.createElement("span");
+    const deleteButton = document.createElement("button");
+    const isOnMap = sceneTokens.some((token) => token.id === character.id);
+    const avatarImage = tokenAvatarImages.get(character.id);
+
+    row.className = "character-row";
+    row.classList.toggle("is-on-map", isOnMap);
+    entry.type = "button";
+    entry.className = "character-entry";
+    entry.draggable = true;
+    entry.dataset.characterId = character.id;
+    avatar.className = "character-avatar";
+    avatar.style.setProperty("--character-color", character.color);
+    text.className = "character-text";
+    name.className = "character-name";
+    status.className = "character-status";
+    name.textContent = character.name;
+    status.textContent = isOnMap ? "已在地图上" : "可拖入地图";
+
+    if (avatarImage) {
+      const image = document.createElement("img");
+      const diameter = 100;
+      const radius = diameter / 2;
+      const scale = character.avatarScale ?? 1;
+      const offsetX = (character.avatarOffsetX ?? 0) * radius;
+      const offsetY = (character.avatarOffsetY ?? 0) * radius;
+      const ratio = avatarImage.image.naturalWidth / avatarImage.image.naturalHeight || 1;
+      const width = ratio >= 1 ? diameter * scale * ratio : diameter * scale;
+      const height = ratio >= 1 ? diameter * scale : (diameter * scale) / ratio;
+
+      image.src = avatarImage.src;
+      image.alt = `${character.name} 头像`;
+      image.style.width = `${width}%`;
+      image.style.height = `${height}%`;
+      image.style.left = `${50 + offsetX}%`;
+      image.style.top = `${50 + offsetY}%`;
+      avatar.append(image);
+    } else {
+      avatar.textContent = character.name.trim().slice(0, 1).toUpperCase() || "P";
+    }
+
+    deleteButton.type = "button";
+    deleteButton.className = "delete-character-button";
+    deleteButton.setAttribute("aria-label", `删除角色 ${character.name}`);
+    deleteButton.innerHTML =
+      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Z"/><path d="M6 9h12l-1 12H7L6 9Zm4 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z"/></svg>';
+    deleteButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteCharacter(character.id);
+    });
+
+    entry.addEventListener("click", () => openTokenInspector(character.id));
+    entry.addEventListener("dragstart", (event) => {
+      if (!event.dataTransfer || !isAdmin()) {
+        return;
+      }
+
+      event.dataTransfer.effectAllowed = "copy";
+      event.dataTransfer.setData("application/x-trpg-character-id", character.id);
+      event.dataTransfer.setData("text/plain", character.id);
+    });
+
+    text.append(name, status);
+    entry.append(avatar, text);
+    row.append(entry, deleteButton);
+    return row;
+  });
+
+  characterList.replaceChildren(...elements);
+  createIcons({
+    icons: { Trash2 },
+    nameAttr: "data-lucide",
+    attrs: {
+      "aria-hidden": "true",
+      class: "tool-icon",
+      focusable: "false",
+    },
+  });
+}
+
+function setCharacterPanelOpen(open: boolean): void {
+  isCharacterPanelOpen = open && isAdmin();
+  renderCharacterPanel();
+}
+
 function isDiceSides(value: number): value is DiceSides {
   return diceSides.includes(value as DiceSides);
 }
@@ -551,8 +676,12 @@ function getSelectedToken(): SceneToken | null {
   return sceneTokens.find((token) => token.id === selectedTokenId) ?? null;
 }
 
-function getInspectedToken(): SceneToken | null {
-  return sceneTokens.find((token) => token.id === inspectedTokenId) ?? null;
+function getInspectedCharacter(): SceneCharacter | null {
+  return sceneCharacters.find((character) => character.id === inspectedCharacterId) ?? null;
+}
+
+function getInspectedTokenInstance(): SceneToken | null {
+  return inspectedCharacterId ? (sceneTokens.find((token) => token.id === inspectedCharacterId) ?? null) : null;
 }
 
 function getSelectedDoor(): SceneDoor | null {
@@ -680,24 +809,24 @@ function sceneImageSnapshots(): SceneImageSnapshot[] {
 }
 
 function syncTokenAvatarImages(): void {
-  const activeTokenIds = new Set(sceneTokens.map((token) => token.id));
-  for (const tokenId of tokenAvatarImages.keys()) {
-    const token = sceneTokens.find((candidate) => candidate.id === tokenId);
-    if (!activeTokenIds.has(tokenId) || !token?.avatarSrc) {
-      tokenAvatarImages.delete(tokenId);
+  const activeCharacterIds = new Set(sceneCharacters.map((character) => character.id));
+  for (const characterId of tokenAvatarImages.keys()) {
+    const character = sceneCharacters.find((candidate) => candidate.id === characterId);
+    if (!activeCharacterIds.has(characterId) || !character?.avatarSrc) {
+      tokenAvatarImages.delete(characterId);
     }
   }
 
-  for (const token of sceneTokens) {
-    const avatarSrc = token.avatarSrc;
-    if (!avatarSrc || tokenAvatarImages.get(token.id)?.src === avatarSrc) {
+  for (const character of sceneCharacters) {
+    const avatarSrc = character.avatarSrc;
+    if (!avatarSrc || tokenAvatarImages.get(character.id)?.src === avatarSrc) {
       continue;
     }
 
-    void loadImageSource(avatarSrc, `${token.name} 头像`)
+    void loadImageSource(avatarSrc, `${character.name} 头像`)
       .then((image) => {
-        if (sceneTokens.some((candidate) => candidate.id === token.id && candidate.avatarSrc === avatarSrc)) {
-          tokenAvatarImages.set(token.id, { src: avatarSrc, image });
+        if (sceneCharacters.some((candidate) => candidate.id === character.id && candidate.avatarSrc === avatarSrc)) {
+          tokenAvatarImages.set(character.id, { src: avatarSrc, image });
         }
       })
       .catch((error: unknown) => {
@@ -726,10 +855,6 @@ function isEditingBlocking(): boolean {
   return isAdmin() && appMode === "edit" && editMode === "blocking";
 }
 
-function isEditingTokens(): boolean {
-  return isAdmin() && appMode === "edit" && editMode === "tokens";
-}
-
 function isEditingRooms(): boolean {
   return isAdmin() && appMode === "edit" && editMode === "rooms";
 }
@@ -746,12 +871,12 @@ function shouldShowLogicMap(): boolean {
   return !isPlayMode() || isLogicMapVisible;
 }
 
-function canControlToken(token: SceneToken): boolean {
+function canControlToken(token: SceneCharacter): boolean {
   return currentIdentity?.type === "admin" || currentIdentity?.id === token.id;
 }
 
 function canInspectToken(): boolean {
-  return isPlayMode();
+  return isLoggedIn();
 }
 
 function canInspectDoor(): boolean {
@@ -772,11 +897,11 @@ function availableModes(): AppMode[] {
 
 function rebuildModeOptions(): void {
   rebuildModeSelectOptions(modeSelect, availableModes());
-  rebuildEditModeSelectOptions(editModeSelect, ["background", "blocking", "tokens", "rooms"]);
+  rebuildEditModeSelectOptions(editModeSelect, ["background", "blocking", "rooms"]);
 }
 
 function renderIdentityList(): void {
-  renderIdentityOptions(identityList, buildIdentities(sceneTokens), enterIdentity);
+  renderIdentityOptions(identityList, buildIdentities(sceneCharacters), enterIdentity);
 }
 
 async function applyImageSnapshots(snapshots: SceneImageSnapshot[]): Promise<void> {
@@ -820,30 +945,38 @@ async function applyImageSnapshots(snapshots: SceneImageSnapshot[]): Promise<voi
 function applySceneSnapshot(snapshot: SceneSnapshot): void {
   void applyImageSnapshots(snapshot.images);
 
+  const nextCharacters = snapshot.characters.map((character) => ({ ...character }));
   const { tokens } = snapshot;
   const previousTokens = new Map(sceneTokens.map((token) => [token.id, token]));
   const nextTokens = tokens.map((token) => ({ ...token, cell: { ...token.cell } }));
-  for (const token of nextTokens) {
-    const pendingName = pendingTokenNames.get(token.id);
+  for (const character of nextCharacters) {
+    const pendingName = pendingTokenNames.get(character.id);
     if (!pendingName) {
       continue;
     }
 
-    if (token.name === pendingName) {
-      pendingTokenNames.delete(token.id);
+    if (character.name === pendingName) {
+      pendingTokenNames.delete(character.id);
     } else {
-      token.name = pendingName;
+      character.name = pendingName;
     }
   }
-  const nextTokenIds = new Set(nextTokens.map((token) => token.id));
-  for (const tokenId of pendingTokenNames.keys()) {
-    if (!nextTokenIds.has(tokenId)) {
-      pendingTokenNames.delete(tokenId);
+  const nextCharacterIds = new Set(nextCharacters.map((character) => character.id));
+  for (const characterId of pendingTokenNames.keys()) {
+    if (!nextCharacterIds.has(characterId)) {
+      pendingTokenNames.delete(characterId);
+    }
+  }
+  const nextCharactersById = new Map(nextCharacters.map((character) => [character.id, character]));
+  for (const token of nextTokens) {
+    const character = nextCharactersById.get(token.id);
+    if (character) {
+      Object.assign(token, character, { cell: token.cell });
     }
   }
 
   const shouldExitDeletedIdentity =
-    currentIdentity?.type === "player" && !nextTokens.some((token) => token.id === currentIdentity?.id);
+    currentIdentity?.type === "player" && !nextCharacters.some((character) => character.id === currentIdentity?.id);
   const startedAt = performance.now();
   const animations: MovingToken[] = [];
   const movementBlockedEdges = movementBlockedEdgeSets();
@@ -872,6 +1005,7 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
     });
   }
 
+  sceneCharacters.splice(0, sceneCharacters.length, ...nextCharacters);
   sceneTokens.splice(0, sceneTokens.length, ...nextTokens);
   syncTokenAvatarImages();
   blockedVerticalEdges.clear();
@@ -900,8 +1034,8 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
     selectedTokenId = null;
   }
 
-  if (inspectedTokenId && !sceneTokens.some((token) => token.id === inspectedTokenId)) {
-    inspectedTokenId = null;
+  if (inspectedCharacterId && !sceneCharacters.some((character) => character.id === inspectedCharacterId)) {
+    inspectedCharacterId = null;
     tokenNameEditing = false;
   }
 
@@ -914,9 +1048,9 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
   }
 
   if (currentIdentity?.type === "player") {
-    const currentToken = sceneTokens.find((token) => token.id === currentIdentity?.id);
-    if (currentToken && currentIdentity.name !== currentToken.name) {
-      currentIdentity = { ...currentIdentity, name: currentToken.name };
+    const currentCharacter = sceneCharacters.find((character) => character.id === currentIdentity?.id);
+    if (currentCharacter && currentIdentity.name !== currentCharacter.name) {
+      currentIdentity = { ...currentIdentity, name: currentCharacter.name };
       networkClient.updateIdentity(currentIdentity);
       identityBadge.textContent = identityLabel(currentIdentity);
     }
@@ -931,6 +1065,8 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
   previewTokenPosition = null;
   previewRoomCells = [];
   renderIdentityList();
+  renderCharacterPanel();
+  updateTokenInspector();
   updateSelectionPanel();
 
   if (shouldExitDeletedIdentity) {
@@ -939,8 +1075,8 @@ function applySceneSnapshot(snapshot: SceneSnapshot): void {
 }
 
 function nextAvailableTokenIndex(): number {
-  const maxTokenIndex = sceneTokens.reduce((maxIndex, token) => {
-    const match = /^P(\d+)$/.exec(token.name);
+  const maxTokenIndex = sceneCharacters.reduce((maxIndex, character) => {
+    const match = /^P(\d+)$/.exec(character.name);
     return match ? Math.max(maxIndex, Number.parseInt(match[1], 10)) : maxIndex;
   }, 0);
 
@@ -962,17 +1098,19 @@ function showIdentityScreen(): void {
   networkClient.connect();
   selectedImageId = null;
   selectedTokenId = null;
-  inspectedTokenId = null;
+  inspectedCharacterId = null;
   selectedDoorId = null;
   selectedRoomId = null;
   interaction = null;
   previewPath = [];
   previewRoomCells = [];
   previewTokenPosition = null;
+  isCharacterPanelOpen = false;
   identityBadge.textContent = identityLabel(null);
   renderIdentityList();
   rebuildModeOptions();
   updateModeControls();
+  updateTokenInspector();
   updateSelectionPanel();
   identityScreen.hidden = false;
 }
@@ -1069,10 +1207,6 @@ function setCursor(screenPoint: Vector2): void {
     canvas.style.cursor = getResizeCursor(resizeHandle);
   } else if ((isEditingBlocking() && (logicTool === "wall" || logicTool === "door")) || isEditingRooms()) {
     canvas.style.cursor = "crosshair";
-  } else if (isEditingTokens() && logicTool === "add-token") {
-    canvas.style.cursor = isCellOccupiedByToken(worldToCell(worldPoint), sceneTokens) ? "not-allowed" : "copy";
-  } else if (isEditingTokens() && logicTool === "delete-token") {
-    canvas.style.cursor = tokenHit ? "pointer" : "default";
   } else if (doorHit) {
     canvas.style.cursor = "pointer";
   } else if (isPlayMode() && tokenHit && canControlToken(tokenHit)) {
@@ -1113,14 +1247,12 @@ function updateRotateInteraction(event: PointerEvent, state: Extract<Interaction
 
 function updateSelectionPanel(): void {
   const selectedImage = getSelectedImage();
-  const selectedToken = canInspectToken() ? getInspectedToken() : null;
   const selectedDoor = canInspectDoor() ? getSelectedDoor() : null;
   const selectedRoom = canInspectRoom() ? getSelectedRoom() : null;
 
-  if (!selectedImage && !selectedToken && !selectedDoor && !selectedRoom) {
+  if (!selectedImage && !selectedDoor && !selectedRoom) {
     selectionPanel.classList.remove("is-open");
     selectionPanel.setAttribute("aria-hidden", "true");
-    tokenNameEditing = false;
     return;
   }
 
@@ -1130,37 +1262,8 @@ function updateSelectionPanel(): void {
     selectionTitle.textContent = selectedImage.name;
     imageSelectionControls.hidden = false;
     imageSelectionActions.hidden = false;
-    tokenSelectionForm.hidden = true;
     doorSelectionForm.hidden = true;
     roomSelectionForm.hidden = true;
-  }
-
-  if (selectedToken) {
-    const canEditToken = canControlToken(selectedToken);
-    const isEditingTokenName = tokenNameEditing && canEditToken;
-
-    selectionEyebrow.textContent = "角色检视";
-    selectionTitle.textContent = selectedToken.name;
-    imageSelectionControls.hidden = true;
-    imageSelectionActions.hidden = true;
-    tokenSelectionForm.hidden = false;
-    doorSelectionForm.hidden = true;
-    roomSelectionForm.hidden = true;
-    tokenNameDisplay.hidden = isEditingTokenName;
-    tokenNameValue.textContent = selectedToken.name;
-    editTokenNameButton.disabled = !canEditToken;
-    tokenNameField.hidden = !isEditingTokenName;
-    tokenNameInput.disabled = !canEditToken;
-    avatarUploadInput.disabled = !canEditToken;
-    avatarUploadButton.classList.toggle("is-disabled", !canEditToken);
-    avatarAdjustControls.hidden = !selectedToken.avatarSrc;
-    editAvatarButton.disabled = !canEditToken;
-    resetAvatarAdjustmentButton.disabled = !canEditToken;
-    tokenPanelHelp.textContent = canEditToken ? "修改后会同步到所有客户端。" : "只有主持人或该角色玩家可以修改姓名。";
-
-    if (document.activeElement !== tokenNameInput || !isEditingTokenName) {
-      tokenNameInput.value = selectedToken.name;
-    }
   }
 
   if (selectedDoor) {
@@ -1169,7 +1272,6 @@ function updateSelectionPanel(): void {
     selectionTitle.textContent = `${selectedDoor.type === "vertical" ? "纵向" : "横向"}门 (${selectedDoor.x}, ${selectedDoor.y})`;
     imageSelectionControls.hidden = true;
     imageSelectionActions.hidden = true;
-    tokenSelectionForm.hidden = true;
     doorSelectionForm.hidden = false;
     roomSelectionForm.hidden = true;
     doorBlocksMovementInput.checked = !selectedDoor.isOpen;
@@ -1182,7 +1284,6 @@ function updateSelectionPanel(): void {
     selectionTitle.textContent = selectedRoom.name || "未命名房间";
     imageSelectionControls.hidden = true;
     imageSelectionActions.hidden = true;
-    tokenSelectionForm.hidden = true;
     doorSelectionForm.hidden = true;
     roomSelectionForm.hidden = false;
     if (document.activeElement !== roomNameInput) {
@@ -1194,13 +1295,62 @@ function updateSelectionPanel(): void {
   selectionPanel.setAttribute("aria-hidden", "false");
 }
 
+function updateTokenInspector(): void {
+  const character = getInspectedCharacter();
+
+  if (!character || !canInspectToken()) {
+    tokenInspectorOverlay.hidden = true;
+    tokenNameEditing = false;
+    return;
+  }
+
+  const tokenInstance = getInspectedTokenInstance();
+  const canEditToken = canControlToken(character);
+  const isEditingTokenName = tokenNameEditing && canEditToken;
+
+  tokenInspectorOverlay.hidden = false;
+  tokenNameDisplay.hidden = false;
+  tokenNameValue.textContent = character.name;
+  tokenNameValue.hidden = isEditingTokenName;
+  editTokenNameButton.disabled = !canEditToken;
+  tokenNameInput.hidden = !isEditingTokenName;
+  tokenNameInput.disabled = !canEditToken;
+  avatarUploadInput.disabled = !canEditToken;
+  avatarUploadButton.classList.toggle("is-disabled", !canEditToken);
+  avatarAdjustControls.hidden = !character.avatarSrc;
+  editAvatarButton.disabled = !canEditToken;
+  resetAvatarAdjustmentButton.disabled = !canEditToken;
+  tokenInstanceActions.hidden = !isAdmin() || !tokenInstance;
+  deleteTokenInstanceButton.disabled = !isAdmin() || !tokenInstance;
+  tokenPanelHelp.textContent = canEditToken ? "修改后会同步到所有客户端。" : "只有主持人或该角色玩家可以修改姓名。";
+
+  if (document.activeElement !== tokenNameInput || !isEditingTokenName) {
+    tokenNameInput.value = character.name;
+  }
+}
+
+function openTokenInspector(characterId: string): void {
+  if (!sceneCharacters.some((character) => character.id === characterId)) {
+    return;
+  }
+
+  inspectedCharacterId = characterId;
+  tokenNameEditing = false;
+  updateTokenInspector();
+}
+
+function closeTokenInspector(): void {
+  inspectedCharacterId = null;
+  tokenNameEditing = false;
+  updateTokenInspector();
+}
+
 function selectImage(imageId: string | null): void {
   selectedImageId = imageId;
   if (imageId) {
     selectedTokenId = null;
-    inspectedTokenId = null;
+    closeTokenInspector();
     selectedDoorId = null;
-    tokenNameEditing = false;
   }
   updateSelectionPanel();
 }
@@ -1211,13 +1361,11 @@ function selectToken(tokenId: string | null, inspect = false): void {
     selectedImageId = null;
     selectedDoorId = null;
     selectedRoomId = null;
-    if (inspect && inspectedTokenId !== tokenId) {
-      tokenNameEditing = false;
+    if (inspect) {
+      openTokenInspector(tokenId);
     }
-    inspectedTokenId = inspect ? tokenId : inspectedTokenId;
   } else {
-    inspectedTokenId = null;
-    tokenNameEditing = false;
+    selectedTokenId = null;
   }
   updateSelectionPanel();
 }
@@ -1227,9 +1375,8 @@ function selectDoor(door: SceneDoor | null): void {
   if (door) {
     selectedImageId = null;
     selectedTokenId = null;
-    inspectedTokenId = null;
+    closeTokenInspector();
     selectedRoomId = null;
-    tokenNameEditing = false;
   }
   updateSelectionPanel();
 }
@@ -1239,9 +1386,8 @@ function selectRoom(roomId: string | null): void {
   if (roomId) {
     selectedImageId = null;
     selectedTokenId = null;
-    inspectedTokenId = null;
+    closeTokenInspector();
     selectedDoorId = null;
-    tokenNameEditing = false;
   }
   updateSelectionPanel();
 }
@@ -1259,8 +1405,6 @@ function setAppMode(nextMode: AppMode): void {
 
   if (!isPlayMode()) {
     selectedTokenId = null;
-    inspectedTokenId = null;
-    tokenNameEditing = false;
     isChatPanelOpen = false;
   }
 
@@ -1274,6 +1418,8 @@ function setAppMode(nextMode: AppMode): void {
   }
 
   updateModeControls();
+  renderCharacterPanel();
+  updateTokenInspector();
   updateSelectionPanel();
 }
 
@@ -1285,18 +1431,12 @@ function setEditMode(nextMode: EditMode): void {
 
   if (editMode === "blocking" && logicTool !== "wall" && logicTool !== "door") {
     logicTool = "wall";
-  } else if (editMode === "tokens" && logicTool !== "add-token" && logicTool !== "delete-token") {
-    logicTool = "add-token";
   } else if (editMode === "rooms") {
     logicTool = "room";
   }
 
   if (!isEditingBackground()) {
     selectedImageId = null;
-  }
-
-  if (!isEditingTokens()) {
-    selectedTokenId = null;
   }
 
   if (!canInspectDoor()) {
@@ -1340,8 +1480,6 @@ function updateModeControls(): void {
       editModeSelect,
       uploadInput,
       uploadButton,
-      addTokenButton,
-      deleteTokenButton,
       wallModeButton,
       doorModeButton,
       roomModeButton,
@@ -1365,6 +1503,36 @@ function updateModeControls(): void {
   );
   renderDicePanel();
   renderChatPanel();
+  renderCharacterPanel();
+}
+
+function addCharacter(): void {
+  const tokenIndex = nextTokenIndex++;
+  const character = createSceneCharacter(tokenIndex);
+
+  sceneCharacters.push(character);
+  renderIdentityList();
+  renderCharacterPanel();
+  openTokenInspector(character.id);
+  networkClient.sendCharacterAdded(character);
+}
+
+function placeCharacterAtCell(characterId: string, cell: Cell): void {
+  if (!isAdmin() || isCellOccupiedByToken(cell, sceneTokens) || sceneTokens.some((token) => token.id === characterId)) {
+    return;
+  }
+
+  const character = sceneCharacters.find((candidate) => candidate.id === characterId);
+  if (!character) {
+    return;
+  }
+
+  const token = createSceneToken(character, cell);
+  sceneTokens.push(token);
+  selectedTokenId = token.id;
+  renderCharacterPanel();
+  updateTokenInspector();
+  networkClient.sendTokenAdded(token);
 }
 
 function addTokenAtCell(cell: Cell): void {
@@ -1373,11 +1541,15 @@ function addTokenAtCell(cell: Cell): void {
   }
 
   const tokenIndex = nextTokenIndex++;
-  const token = createSceneToken(cell, tokenIndex);
+  const character = createSceneCharacter(tokenIndex);
+  const token = createSceneToken(character, cell);
 
+  sceneCharacters.push(character);
   sceneTokens.push(token);
   renderIdentityList();
-  selectToken(token.id);
+  renderCharacterPanel();
+  openTokenInspector(token.id);
+  networkClient.sendCharacterAdded(character);
   networkClient.sendTokenAdded(token);
 }
 
@@ -1393,15 +1565,45 @@ function deleteToken(tokenId: string): void {
   if (selectedTokenId === tokenId) {
     selectedTokenId = null;
   }
-  if (inspectedTokenId === tokenId) {
-    inspectedTokenId = null;
+  previewPath = [];
+  previewTokenPosition = null;
+  renderCharacterPanel();
+  updateTokenInspector();
+  updateSelectionPanel();
+  networkClient.sendTokenDeleted(tokenId);
+}
+
+function deleteCharacter(characterId: string): void {
+  if (!isAdmin()) {
+    return;
+  }
+
+  const characterIndex = sceneCharacters.findIndex((character) => character.id === characterId);
+  if (characterIndex === -1) {
+    return;
+  }
+
+  sceneCharacters.splice(characterIndex, 1);
+  const tokenIndex = sceneTokens.findIndex((token) => token.id === characterId);
+  if (tokenIndex !== -1) {
+    sceneTokens.splice(tokenIndex, 1);
+  }
+  pendingTokenNames.delete(characterId);
+  movingTokens = movingTokens.filter((animation) => animation.tokenId !== characterId);
+  if (selectedTokenId === characterId) {
+    selectedTokenId = null;
+  }
+  if (inspectedCharacterId === characterId) {
+    inspectedCharacterId = null;
     tokenNameEditing = false;
   }
   previewPath = [];
   previewTokenPosition = null;
   renderIdentityList();
+  renderCharacterPanel();
+  updateTokenInspector();
   updateSelectionPanel();
-  networkClient.sendTokenDeleted(tokenId);
+  networkClient.sendCharacterDeleted(characterId);
 }
 
 function toggleDoorAtEdge(edge: { type: WallEdgeType; x: number; y: number }): void {
@@ -1556,13 +1758,22 @@ function resetSelectedImageSize(): void {
   networkClient.sendImageUpdated(sceneImageSnapshot(selectedImage));
 }
 
-function sendTokenNameUpdate(token: SceneToken): void {
-  pendingTokenNames.set(token.id, token.name);
-  networkClient.sendTokenUpdated(token);
+function syncTokenInstanceFromCharacter(character: SceneCharacter): void {
+  const token = sceneTokens.find((candidate) => candidate.id === character.id);
+  if (!token) {
+    return;
+  }
+
+  Object.assign(token, character, { cell: token.cell });
+}
+
+function sendTokenNameUpdate(character: SceneCharacter): void {
+  pendingTokenNames.set(character.id, character.name);
+  networkClient.sendCharacterUpdated(character);
 }
 
 function updateSelectedTokenName(name: string): void {
-  const token = getInspectedToken();
+  const token = getInspectedCharacter();
   const normalizedName = name.trim();
   if (!token || !canControlToken(token) || normalizedName.length === 0 || token.name === normalizedName) {
     return;
@@ -1577,18 +1788,20 @@ function updateSelectedTokenName(name: string): void {
   }
 
   renderIdentityList();
-  updateSelectionPanel();
+  renderCharacterPanel();
+  syncTokenInstanceFromCharacter(token);
+  updateTokenInspector();
   sendTokenNameUpdate(token);
 }
 
 function startTokenNameEditing(): void {
-  const token = getInspectedToken();
+  const token = getInspectedCharacter();
   if (!token || !canControlToken(token)) {
     return;
   }
 
   tokenNameEditing = true;
-  updateSelectionPanel();
+  updateTokenInspector();
   tokenNameInput.focus();
   tokenNameInput.select();
 }
@@ -1600,16 +1813,18 @@ function stopTokenNameEditing(): void {
 
   updateSelectedTokenName(tokenNameInput.value);
   tokenNameEditing = false;
-  updateSelectionPanel();
+  updateTokenInspector();
 }
 
-function updateTokenAvatar(token: SceneToken): void {
-  updateSelectionPanel();
-  networkClient.sendTokenUpdated(token);
+function updateTokenAvatar(token: SceneCharacter): void {
+  syncTokenInstanceFromCharacter(token);
+  renderCharacterPanel();
+  updateTokenInspector();
+  networkClient.sendCharacterUpdated(token);
 }
 
 async function uploadSelectedTokenAvatar(file: File): Promise<void> {
-  const token = getInspectedToken();
+  const token = getInspectedCharacter();
   if (!token || !canControlToken(token)) {
     return;
   }
@@ -1627,7 +1842,7 @@ async function uploadSelectedTokenAvatar(file: File): Promise<void> {
 }
 
 async function editSelectedTokenAvatar(): Promise<void> {
-  const token = getInspectedToken();
+  const token = getInspectedCharacter();
   if (!token || !canControlToken(token) || !token.avatarSrc) {
     return;
   }
@@ -1644,7 +1859,7 @@ async function editSelectedTokenAvatar(): Promise<void> {
 }
 
 function resetSelectedTokenAvatarAdjustment(): void {
-  const token = getInspectedToken();
+  const token = getInspectedCharacter();
   if (!token || !canControlToken(token) || !token.avatarSrc) {
     return;
   }
@@ -1706,7 +1921,7 @@ function renderAvatarEditor(): void {
 }
 
 function openAvatarEditor(
-  token: SceneToken,
+  token: SceneCharacter,
   src: string,
   image: HTMLImageElement,
   transform: { scale: number; offsetX: number; offsetY: number },
@@ -1734,7 +1949,7 @@ function saveAvatarEditor(): void {
     return;
   }
 
-  const token = sceneTokens.find((candidate) => candidate.id === avatarEditor?.tokenId);
+  const token = sceneCharacters.find((candidate) => candidate.id === avatarEditor?.tokenId);
   if (!token || !canControlToken(token)) {
     closeAvatarEditor();
     return;
@@ -1764,18 +1979,6 @@ editModeSelect.addEventListener("change", () => {
   }
 
   setEditMode(editModeSelect.value as EditMode);
-});
-
-addTokenButton.addEventListener("click", () => {
-  if (isEditingTokens()) {
-    setLogicTool("add-token");
-  }
-});
-
-deleteTokenButton.addEventListener("click", () => {
-  if (isEditingTokens()) {
-    setLogicTool("delete-token");
-  }
 });
 
 wallModeButton.addEventListener("click", () => {
@@ -1826,6 +2029,29 @@ uploadInput.addEventListener("change", () => {
   uploadInput.value = "";
 });
 
+function draggedCharacterId(event: DragEvent): string | null {
+  return event.dataTransfer?.getData("application/x-trpg-character-id") || null;
+}
+
+canvas.addEventListener("dragover", (event) => {
+  if (!isAdmin() || !event.dataTransfer?.types.includes("application/x-trpg-character-id")) {
+    return;
+  }
+
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "copy";
+});
+
+canvas.addEventListener("drop", (event) => {
+  const characterId = draggedCharacterId(event);
+  if (!isAdmin() || !characterId) {
+    return;
+  }
+
+  event.preventDefault();
+  placeCharacterAtCell(characterId, worldToCell(screenToWorld(screenPointFromEvent(event))));
+});
+
 canvas.addEventListener("pointerdown", (event) => {
   const screenPoint = screenPointFromEvent(event);
   const worldPoint = screenToWorld(screenPoint);
@@ -1836,9 +2062,8 @@ canvas.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     selectedImageId = null;
     selectedTokenId = null;
-    inspectedTokenId = null;
+    closeTokenInspector();
     selectedDoorId = null;
-    tokenNameEditing = false;
     updateSelectionPanel();
     interaction = {
       type: "pan-camera",
@@ -1859,26 +2084,11 @@ canvas.addEventListener("pointerdown", (event) => {
   const rotateHandleHit = hitTestRotateHandle(screenPoint);
   const resizeHandle = hitTestResizeHandle(screenPoint);
 
-  if (isEditingBlocking() || isEditingTokens() || isEditingRooms()) {
+  if (isEditingBlocking() || isEditingRooms()) {
     selectedImageId = null;
     selectedTokenId = null;
-    inspectedTokenId = null;
     selectedRoomId = null;
-    tokenNameEditing = false;
     updateSelectionPanel();
-
-    if (isEditingTokens() && logicTool === "add-token") {
-      addTokenAtCell(worldToCell(worldPoint));
-      return;
-    }
-
-    if (isEditingTokens() && logicTool === "delete-token") {
-      const tokenHit = hitTestToken(worldPoint);
-      if (tokenHit) {
-        deleteToken(tokenHit.id);
-      }
-      return;
-    }
 
     if (isEditingRooms()) {
       const region = previewRoomCells.length > 0 ? previewRoomCells : closedRegionAt(worldPoint);
@@ -1979,10 +2189,8 @@ canvas.addEventListener("pointerdown", (event) => {
     } else {
       selectedImageId = null;
       selectedTokenId = null;
-      inspectedTokenId = null;
       selectedDoorId = null;
       selectedRoomId = null;
-      tokenNameEditing = false;
       updateSelectionPanel();
     }
   }
@@ -2364,6 +2572,25 @@ chatToggleButton.addEventListener("click", () => {
 chatCloseButton.addEventListener("click", () => {
   setChatPanelOpen(false);
 });
+characterToggleButton.addEventListener("click", () => {
+  setCharacterPanelOpen(!isCharacterPanelOpen);
+});
+characterCloseButton.addEventListener("click", () => {
+  setCharacterPanelOpen(false);
+});
+addCharacterButton.addEventListener("click", addCharacter);
+closeTokenInspectorButton.addEventListener("click", closeTokenInspector);
+tokenInspectorOverlay.addEventListener("click", (event) => {
+  if (event.target === tokenInspectorOverlay) {
+    closeTokenInspector();
+  }
+});
+deleteTokenInstanceButton.addEventListener("click", () => {
+  const token = getInspectedTokenInstance();
+  if (token && isAdmin()) {
+    deleteToken(token.id);
+  }
+});
 
 window.addEventListener("resize", () => {
   resizeCanvas();
@@ -2374,5 +2601,7 @@ renderIdentityList();
 showIdentityScreen();
 renderDicePanel();
 renderChatPanel();
+renderCharacterPanel();
+updateTokenInspector();
 resizeCanvas();
 requestAnimationFrame(tick);
