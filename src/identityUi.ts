@@ -8,8 +8,10 @@ const MODE_LABELS: Record<AppMode, string> = {
 };
 
 const EDIT_MODE_LABELS: Record<EditMode, string> = {
-  art: "美术地图",
-  logic: "逻辑地图",
+  background: "背景",
+  blocking: "阻挡",
+  tokens: "角色",
+  rooms: "房间",
 };
 
 export function buildIdentities(tokens: SceneToken[]): Identity[] {

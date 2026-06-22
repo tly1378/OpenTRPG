@@ -123,25 +123,74 @@ button {
 
 .tool-button {
   display: inline-flex;
-  min-height: 38px;
+  position: relative;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
   align-items: center;
   justify-content: center;
   border: 1px solid rgb(255 255 255 / 14%);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgb(18 24 33 / 86%);
   color: #f7fafc;
   box-shadow: 0 10px 30px rgb(0 0 0 / 28%);
   cursor: pointer;
-  padding: 0 14px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0;
   pointer-events: auto;
   user-select: none;
   backdrop-filter: blur(12px);
+}
+
+.tool-button .tool-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  stroke-width: 2.2;
+}
+
+.tool-button::after {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 8px);
+  z-index: 20;
+  min-width: max-content;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 8px;
+  background: rgb(14 18 25 / 88%);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 32%);
+  color: #dbe7f3;
+  content: attr(data-tooltip);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0;
+  padding: 8px 10px;
+  pointer-events: none;
+  transform: translate(-6px, -50%);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+  white-space: nowrap;
 }
 
 .tool-button:hover,
 .tool-button.is-active {
   border-color: rgb(104 191 255 / 70%);
   background: rgb(22 45 66 / 92%);
+}
+
+.tool-button:hover::after,
+.tool-button:focus-visible::after {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+.tool-button:focus-visible {
+  outline: 2px solid rgb(104 191 255 / 60%);
+  outline-offset: 2px;
 }
 
 .tool-button.subtle-button {
@@ -163,6 +212,17 @@ button {
   top: 16px;
   right: 16px;
   z-index: 12;
+}
+
+#switch-identity-button::after {
+  right: calc(100% + 8px);
+  left: auto;
+  transform: translate(6px, -50%);
+}
+
+#switch-identity-button:hover::after,
+#switch-identity-button:focus-visible::after {
+  transform: translate(0, -50%);
 }
 
 .tool-button.is-hidden {

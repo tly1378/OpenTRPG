@@ -29,23 +29,39 @@
         <label class="mode-select-label edit-mode-select-label">
           编辑
           <select id="edit-mode-select" class="mode-select">
-            <option value="art">美术地图</option>
-            <option value="logic">逻辑地图</option>
+            <option value="background">背景</option>
+            <option value="blocking">阻挡</option>
+            <option value="tokens">角色</option>
+            <option value="rooms">房间</option>
           </select>
         </label>
-        <label id="upload-button" class="tool-button upload-button">
-          上传图片
+        <label id="upload-button" class="tool-button upload-button" aria-label="上传图片" data-tooltip="上传图片">
+          <span data-lucide="upload" aria-hidden="true"></span>
           <input id="image-upload" type="file" accept="image/*" multiple />
         </label>
-        <button id="add-token-button" type="button" class="tool-button" aria-pressed="false">放置角色</button>
-        <button id="delete-token-button" type="button" class="tool-button destructive-button" aria-pressed="false">删除角色</button>
-        <button id="wall-mode-button" type="button" class="tool-button" aria-pressed="false">编辑阻挡边</button>
-        <button id="door-mode-button" type="button" class="tool-button" aria-pressed="false">编辑门</button>
-        <button id="room-mode-button" type="button" class="tool-button" aria-pressed="false">设置房间</button>
-        <button id="clear-walls-button" type="button" class="tool-button subtle-button">清空阻挡边</button>
-        <button id="switch-identity-button" type="button" class="tool-button subtle-button">切换身份</button>
+        <button id="add-token-button" type="button" class="tool-button" aria-label="放置角色" aria-pressed="false" data-tooltip="放置角色">
+          <span data-lucide="user-plus" aria-hidden="true"></span>
+        </button>
+        <button id="delete-token-button" type="button" class="tool-button destructive-button" aria-label="删除角色" aria-pressed="false" data-tooltip="删除角色">
+          <span data-lucide="user-minus" aria-hidden="true"></span>
+        </button>
+        <button id="wall-mode-button" type="button" class="tool-button" aria-label="编辑阻挡边" aria-pressed="false" data-tooltip="编辑阻挡边">
+          <span data-lucide="brick-wall" aria-hidden="true"></span>
+        </button>
+        <button id="door-mode-button" type="button" class="tool-button" aria-label="编辑门" aria-pressed="false" data-tooltip="编辑门">
+          <span data-lucide="door-open" aria-hidden="true"></span>
+        </button>
+        <button id="room-mode-button" type="button" class="tool-button" aria-label="设置房间" aria-pressed="false" data-tooltip="设置房间">
+          <span data-lucide="land-plot" aria-hidden="true"></span>
+        </button>
+        <button id="clear-walls-button" type="button" class="tool-button subtle-button" aria-label="清空阻挡边" data-tooltip="清空阻挡边">
+          <span data-lucide="eraser" aria-hidden="true"></span>
+        </button>
+        <button id="switch-identity-button" type="button" class="tool-button subtle-button" aria-label="切换身份" data-tooltip="切换身份">
+          <span data-lucide="refresh-cw" aria-hidden="true"></span>
+        </button>
         <span id="identity-badge" class="identity-badge">未登录</span>
-        <span class="hint">右键拖动画布移动相机 · 滚轮缩放画面 · 编辑模式：美术地图/逻辑地图 · 主持/游玩模式：拖拽角色，双击角色检视，主持人点击门检视</span>
+        <span class="hint">右键拖动画布移动相机 · 滚轮缩放画面 · 编辑模式：背景/阻挡/角色/房间 · 主持/游玩模式：拖拽角色，双击角色检视，主持人点击门检视</span>
       </header>
 
       <div id="drop-overlay" class="drop-overlay" hidden>松开以上传图片</div>

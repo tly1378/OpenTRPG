@@ -32,51 +32,54 @@ export function updateModeControls(
   },
 ): void {
   const { appMode, editMode, logicTool, isLoggedIn, isAdmin } = params;
-  const isEditingArt = isLoggedIn && isAdmin && appMode === "edit" && editMode === "art";
-  const isEditingLogic = isLoggedIn && isAdmin && appMode === "edit" && editMode === "logic";
+  const isEditing = isLoggedIn && isAdmin && appMode === "edit";
+  const isEditingBackground = isEditing && editMode === "background";
+  const isEditingBlocking = isEditing && editMode === "blocking";
+  const isEditingTokens = isEditing && editMode === "tokens";
+  const isEditingRooms = isEditing && editMode === "rooms";
 
   controls.modeSelect.value = appMode;
   controls.modeSelect.disabled = !isLoggedIn || !isAdmin;
   controls.modeSelectLabel.classList.toggle("is-hidden", !isLoggedIn || !isAdmin);
   controls.editModeSelect.value = editMode;
-  controls.editModeSelect.disabled = !isEditingArt && !isEditingLogic;
+  controls.editModeSelect.disabled = !isEditing;
   controls.editModeSelectLabel.classList.toggle("is-hidden", appMode !== "edit" || !isLoggedIn || !isAdmin);
 
-  controls.uploadInput.disabled = !isEditingArt;
+  controls.uploadInput.disabled = !isEditingBackground;
   controls.uploadButton.classList.toggle("is-disabled", controls.uploadInput.disabled);
-  controls.uploadButton.classList.toggle("is-hidden", !isEditingArt);
-  controls.addTokenButton.disabled = !isEditingLogic;
-  controls.addTokenButton.classList.toggle("is-hidden", !isEditingLogic);
-  controls.deleteTokenButton.disabled = !isEditingLogic;
-  controls.deleteTokenButton.classList.toggle("is-hidden", !isEditingLogic);
-  controls.wallModeButton.disabled = !isEditingLogic;
-  controls.wallModeButton.classList.toggle("is-hidden", !isEditingLogic);
-  controls.doorModeButton.disabled = !isEditingLogic;
-  controls.doorModeButton.classList.toggle("is-hidden", !isEditingLogic);
-  controls.roomModeButton.disabled = !isEditingLogic;
-  controls.roomModeButton.classList.toggle("is-hidden", !isEditingLogic);
-  controls.clearWallsButton.disabled = !isEditingLogic;
-  controls.clearWallsButton.classList.toggle("is-hidden", !isEditingLogic);
-  controls.resetSizeButton.disabled = !isEditingArt;
-  controls.layerUpButton.disabled = !isEditingArt;
-  controls.layerDownButton.disabled = !isEditingArt;
-  controls.layerTopButton.disabled = !isEditingArt;
-  controls.layerBottomButton.disabled = !isEditingArt;
+  controls.uploadButton.classList.toggle("is-hidden", !isEditingBackground);
+  controls.addTokenButton.disabled = !isEditingTokens;
+  controls.addTokenButton.classList.toggle("is-hidden", !isEditingTokens);
+  controls.deleteTokenButton.disabled = !isEditingTokens;
+  controls.deleteTokenButton.classList.toggle("is-hidden", !isEditingTokens);
+  controls.wallModeButton.disabled = !isEditingBlocking;
+  controls.wallModeButton.classList.toggle("is-hidden", !isEditingBlocking);
+  controls.doorModeButton.disabled = !isEditingBlocking;
+  controls.doorModeButton.classList.toggle("is-hidden", !isEditingBlocking);
+  controls.roomModeButton.disabled = !isEditingRooms;
+  controls.roomModeButton.classList.toggle("is-hidden", !isEditingRooms);
+  controls.clearWallsButton.disabled = !isEditingBlocking;
+  controls.clearWallsButton.classList.toggle("is-hidden", !isEditingBlocking);
+  controls.resetSizeButton.disabled = !isEditingBackground;
+  controls.layerUpButton.disabled = !isEditingBackground;
+  controls.layerDownButton.disabled = !isEditingBackground;
+  controls.layerTopButton.disabled = !isEditingBackground;
+  controls.layerBottomButton.disabled = !isEditingBackground;
 
-  controls.addTokenButton.classList.toggle("is-active", isEditingLogic && logicTool === "add-token");
-  controls.deleteTokenButton.classList.toggle("is-active", isEditingLogic && logicTool === "delete-token");
-  controls.wallModeButton.classList.toggle("is-active", isEditingLogic && logicTool === "wall");
-  controls.doorModeButton.classList.toggle("is-active", isEditingLogic && logicTool === "door");
-  controls.roomModeButton.classList.toggle("is-active", isEditingLogic && logicTool === "room");
-  controls.addTokenButton.setAttribute("aria-pressed", String(isEditingLogic && logicTool === "add-token"));
-  controls.deleteTokenButton.setAttribute("aria-pressed", String(isEditingLogic && logicTool === "delete-token"));
-  controls.wallModeButton.setAttribute("aria-pressed", String(isEditingLogic && logicTool === "wall"));
-  controls.doorModeButton.setAttribute("aria-pressed", String(isEditingLogic && logicTool === "door"));
-  controls.roomModeButton.setAttribute("aria-pressed", String(isEditingLogic && logicTool === "room"));
+  controls.addTokenButton.classList.toggle("is-active", isEditingTokens && logicTool === "add-token");
+  controls.deleteTokenButton.classList.toggle("is-active", isEditingTokens && logicTool === "delete-token");
+  controls.wallModeButton.classList.toggle("is-active", isEditingBlocking && logicTool === "wall");
+  controls.doorModeButton.classList.toggle("is-active", isEditingBlocking && logicTool === "door");
+  controls.roomModeButton.classList.toggle("is-active", isEditingRooms);
+  controls.addTokenButton.setAttribute("aria-pressed", String(isEditingTokens && logicTool === "add-token"));
+  controls.deleteTokenButton.setAttribute("aria-pressed", String(isEditingTokens && logicTool === "delete-token"));
+  controls.wallModeButton.setAttribute("aria-pressed", String(isEditingBlocking && logicTool === "wall"));
+  controls.doorModeButton.setAttribute("aria-pressed", String(isEditingBlocking && logicTool === "door"));
+  controls.roomModeButton.setAttribute("aria-pressed", String(isEditingRooms));
   controls.canvas.classList.toggle(
     "is-wall-mode",
-    isEditingLogic && (logicTool === "wall" || logicTool === "door" || logicTool === "room"),
+    (isEditingBlocking && (logicTool === "wall" || logicTool === "door")) || isEditingRooms,
   );
-  controls.canvas.classList.toggle("is-art-mode", isEditingArt);
+  controls.canvas.classList.toggle("is-art-mode", isEditingBackground);
   controls.canvas.classList.toggle("is-play-mode", isLoggedIn && appMode === "play");
 }

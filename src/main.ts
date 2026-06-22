@@ -1,4 +1,5 @@
 import "./styles.css";
+import { BrickWall, DoorOpen, Eraser, LandPlot, RefreshCw, Upload, UserMinus, UserPlus, createIcons } from "lucide";
 import { GRID_CELL_SIZE, TOKEN_STEP_ANIMATION_MS } from "./constants";
 import { mustGetCanvasContext, mustQuery } from "./dom";
 import { add, rotate } from "./geometry";
@@ -109,6 +110,24 @@ const cancelAvatarEditButton = mustQuery<HTMLButtonElement>("#cancel-avatar-edit
 const saveAvatarEditButton = mustQuery<HTMLButtonElement>("#save-avatar-edit");
 
 const ctx = mustGetCanvasContext(canvas);
+createIcons({
+  icons: {
+    BrickWall,
+    DoorOpen,
+    Eraser,
+    LandPlot,
+    RefreshCw,
+    Upload,
+    UserMinus,
+    UserPlus,
+  },
+  nameAttr: "data-lucide",
+  attrs: {
+    "aria-hidden": "true",
+    class: "tool-icon",
+    focusable: "false",
+  },
+});
 const latencyPanel = document.createElement("aside");
 latencyPanel.className = "latency-panel";
 latencyPanel.hidden = true;
@@ -143,7 +162,7 @@ let selectedRoomId: string | null = null;
 let currentIdentity: Identity | null = null;
 let interaction: Interaction | null = null;
 let appMode: AppMode = "play";
-let editMode: EditMode = "art";
+let editMode: EditMode = "background";
 let logicTool: LogicTool = "wall";
 let nextZ = 1;
 let nextTokenIndex = 1;
@@ -355,12 +374,20 @@ function isLoggedIn(): boolean {
   return currentIdentity !== null;
 }
 
-function isEditingArt(): boolean {
-  return isAdmin() && appMode === "edit" && editMode === "art";
+function isEditingBackground(): boolean {
+  return isAdmin() && appMode === "edit" && editMode === "background";
 }
 
-function isEditingLogic(): boolean {
-  return isAdmin() && appMode === "edit" && editMode === "logic";
+function isEditingBlocking(): boolean {
+  return isAdmin() && appMode === "edit" && editMode === "blocking";
+}
+
+function isEditingTokens(): boolean {
+  return isAdmin() && appMode === "edit" && editMode === "tokens";
+}
+
+function isEditingRooms(): boolean {
+  return isAdmin() && appMode === "edit" && editMode === "rooms";
 }
 
 function isPlayMode(): boolean {
@@ -380,7 +407,7 @@ function canInspectDoor(): boolean {
 }
 
 function canInspectRoom(): boolean {
-  return isEditingLogic();
+  return isEditingRooms();
 }
 
 function isTokenAnimating(tokenId: string): boolean {
@@ -393,7 +420,7 @@ function availableModes(): AppMode[] {
 
 function rebuildModeOptions(): void {
   rebuildModeSelectOptions(modeSelect, availableModes());
-  rebuildEditModeSelectOptions(editModeSelect, ["art", "logic"]);
+  rebuildEditModeSelectOptions(editModeSelect, ["background", "blocking", "tokens", "rooms"]);
 }
 
 function renderIdentityList(): void {
@@ -654,7 +681,7 @@ function hitTestToken(worldPoint: Vector2): SceneToken | null {
 }
 
 function updateRoomPreview(worldPoint: Vector2): void {
-  previewRoomCells = isEditingLogic() && logicTool === "room" ? closedRegionAt(worldPoint) : [];
+  previewRoomCells = isEditingRooms() ? closedRegionAt(worldPoint) : [];
 }
 
 function hitTestResizeHandle(screenPoint: Vector2) {
@@ -679,21 +706,21 @@ function setCursor(screenPoint: Vector2): void {
   const tokenHit = hitTestToken(worldPoint);
   const doorHit = canInspectDoor() ? hitTestDoor(worldPoint) : null;
 
-  if (isEditingArt() && hitTestRotateHandle(screenPoint)) {
+  if (isEditingBackground() && hitTestRotateHandle(screenPoint)) {
     canvas.style.cursor = "grab";
-  } else if (isEditingArt() && resizeHandle) {
+  } else if (isEditingBackground() && resizeHandle) {
     canvas.style.cursor = getResizeCursor(resizeHandle);
-  } else if (isEditingLogic() && (logicTool === "wall" || logicTool === "door" || logicTool === "room")) {
+  } else if ((isEditingBlocking() && (logicTool === "wall" || logicTool === "door")) || isEditingRooms()) {
     canvas.style.cursor = "crosshair";
-  } else if (isEditingLogic() && logicTool === "add-token") {
+  } else if (isEditingTokens() && logicTool === "add-token") {
     canvas.style.cursor = isCellOccupiedByToken(worldToCell(worldPoint), sceneTokens) ? "not-allowed" : "copy";
-  } else if (isEditingLogic() && logicTool === "delete-token") {
+  } else if (isEditingTokens() && logicTool === "delete-token") {
     canvas.style.cursor = tokenHit ? "pointer" : "default";
   } else if (doorHit) {
     canvas.style.cursor = "pointer";
   } else if (isPlayMode() && tokenHit && canControlToken(tokenHit)) {
     canvas.style.cursor = "grab";
-  } else if (isEditingArt() && hitTestImage(worldPoint)) {
+  } else if (isEditingBackground() && hitTestImage(worldPoint)) {
     canvas.style.cursor = "move";
   } else {
     canvas.style.cursor = "default";
@@ -869,7 +896,7 @@ function setAppMode(nextMode: AppMode): void {
   previewPath = [];
   previewTokenPosition = null;
 
-  if (!isEditingArt()) {
+  if (!isEditingBackground()) {
     selectedImageId = null;
   }
 
@@ -898,11 +925,19 @@ function setEditMode(nextMode: EditMode): void {
   previewPath = [];
   previewTokenPosition = null;
 
-  if (!isEditingArt()) {
+  if (editMode === "blocking" && logicTool !== "wall" && logicTool !== "door") {
+    logicTool = "wall";
+  } else if (editMode === "tokens" && logicTool !== "add-token" && logicTool !== "delete-token") {
+    logicTool = "add-token";
+  } else if (editMode === "rooms") {
+    logicTool = "room";
+  }
+
+  if (!isEditingBackground()) {
     selectedImageId = null;
   }
 
-  if (!isEditingLogic()) {
+  if (!isEditingTokens()) {
     selectedTokenId = null;
   }
 
@@ -1330,37 +1365,37 @@ editModeSelect.addEventListener("change", () => {
 });
 
 addTokenButton.addEventListener("click", () => {
-  if (isEditingLogic()) {
+  if (isEditingTokens()) {
     setLogicTool("add-token");
   }
 });
 
 deleteTokenButton.addEventListener("click", () => {
-  if (isEditingLogic()) {
+  if (isEditingTokens()) {
     setLogicTool("delete-token");
   }
 });
 
 wallModeButton.addEventListener("click", () => {
-  if (isEditingLogic()) {
+  if (isEditingBlocking()) {
     setLogicTool("wall");
   }
 });
 
 doorModeButton.addEventListener("click", () => {
-  if (isEditingLogic()) {
+  if (isEditingBlocking()) {
     setLogicTool("door");
   }
 });
 
 roomModeButton.addEventListener("click", () => {
-  if (isEditingLogic()) {
+  if (isEditingRooms()) {
     setLogicTool("room");
   }
 });
 
 clearWallsButton.addEventListener("click", () => {
-  if (!isEditingLogic()) {
+  if (!isEditingBlocking()) {
     return;
   }
 
@@ -1371,7 +1406,7 @@ clearWallsButton.addEventListener("click", () => {
 });
 
 uploadInput.addEventListener("change", () => {
-  if (isEditingArt() && uploadInput.files) {
+  if (isEditingBackground() && uploadInput.files) {
     handleFiles(uploadInput.files);
   }
 
@@ -1411,7 +1446,7 @@ canvas.addEventListener("pointerdown", (event) => {
   const rotateHandleHit = hitTestRotateHandle(screenPoint);
   const resizeHandle = hitTestResizeHandle(screenPoint);
 
-  if (isEditingLogic()) {
+  if (isEditingBlocking() || isEditingTokens() || isEditingRooms()) {
     selectedImageId = null;
     selectedTokenId = null;
     inspectedTokenId = null;
@@ -1419,12 +1454,12 @@ canvas.addEventListener("pointerdown", (event) => {
     tokenNameEditing = false;
     updateSelectionPanel();
 
-    if (logicTool === "add-token") {
+    if (isEditingTokens() && logicTool === "add-token") {
       addTokenAtCell(worldToCell(worldPoint));
       return;
     }
 
-    if (logicTool === "delete-token") {
+    if (isEditingTokens() && logicTool === "delete-token") {
       const tokenHit = hitTestToken(worldPoint);
       if (tokenHit) {
         deleteToken(tokenHit.id);
@@ -1432,15 +1467,19 @@ canvas.addEventListener("pointerdown", (event) => {
       return;
     }
 
-    const edge = nearestEditableEdge(worldPoint);
-    if (logicTool === "door") {
-      toggleDoorAtEdge(edge);
+    if (isEditingRooms()) {
+      const region = previewRoomCells.length > 0 ? previewRoomCells : closedRegionAt(worldPoint);
+      selectRoomFromCells(region);
       return;
     }
 
-    if (logicTool === "room") {
-      const region = previewRoomCells.length > 0 ? previewRoomCells : closedRegionAt(worldPoint);
-      selectRoomFromCells(region);
+    if (!isEditingBlocking()) {
+      return;
+    }
+
+    const edge = nearestEditableEdge(worldPoint);
+    if (logicTool === "door") {
+      toggleDoorAtEdge(edge);
       return;
     }
 
@@ -1461,7 +1500,7 @@ canvas.addEventListener("pointerdown", (event) => {
     return;
   }
 
-  if (isEditingArt() && selectedImage && rotateHandleHit) {
+  if (isEditingBackground() && selectedImage && rotateHandleHit) {
     const angle = Math.atan2(worldPoint.y - selectedImage.y, worldPoint.x - selectedImage.x);
     interaction = {
       type: "rotate-image",
@@ -1470,7 +1509,7 @@ canvas.addEventListener("pointerdown", (event) => {
       startAngle: angle,
       startRotation: selectedImage.rotation,
     };
-  } else if (isEditingArt() && selectedImage && resizeHandle) {
+  } else if (isEditingBackground() && selectedImage && resizeHandle) {
     interaction = {
       type: "resize-image",
       imageId: selectedImage.id,
@@ -1484,7 +1523,7 @@ canvas.addEventListener("pointerdown", (event) => {
   } else {
     const tokenHit = isPlayMode() ? hitTestToken(worldPoint) : null;
     const doorHit = canInspectDoor() ? hitTestDoor(worldPoint) : null;
-    const imageHit = isEditingArt() ? hitTestImage(worldPoint) : null;
+    const imageHit = isEditingBackground() ? hitTestImage(worldPoint) : null;
 
     if (doorHit) {
       selectDoor(doorHit);
@@ -1685,7 +1724,7 @@ canvas.addEventListener(
 );
 
 window.addEventListener("dragenter", (event) => {
-  if (!isEditingArt() || !hasDraggedImage(event)) {
+  if (!isEditingBackground() || !hasDraggedImage(event)) {
     return;
   }
 
@@ -1695,7 +1734,7 @@ window.addEventListener("dragenter", (event) => {
 });
 
 window.addEventListener("dragover", (event) => {
-  if (!isEditingArt() && hasDraggedImage(event)) {
+  if (!isEditingBackground() && hasDraggedImage(event)) {
     event.preventDefault();
     return;
   }
@@ -1708,7 +1747,7 @@ window.addEventListener("dragover", (event) => {
 });
 
 window.addEventListener("dragleave", (event) => {
-  if (!isEditingArt() || !hasDraggedImage(event)) {
+  if (!isEditingBackground() || !hasDraggedImage(event)) {
     return;
   }
 
@@ -1718,7 +1757,7 @@ window.addEventListener("dragleave", (event) => {
 });
 
 window.addEventListener("drop", (event) => {
-  if (!isEditingArt()) {
+  if (!isEditingBackground()) {
     if (hasDraggedImage(event)) {
       event.preventDefault();
     }

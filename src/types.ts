@@ -15,7 +15,7 @@ export type ClientPointEvent = {
 
 export type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 export type AppMode = "edit" | "play";
-export type EditMode = "art" | "logic";
+export type EditMode = "background" | "blocking" | "tokens" | "rooms";
 export type LogicTool = "add-token" | "delete-token" | "wall" | "door" | "room";
 export type WallEdgeType = "vertical" | "horizontal";
 
