@@ -1,5 +1,5 @@
 import "./styles.css";
-import { BrickWall, DoorOpen, Eraser, LandPlot, RefreshCw, Upload, UserMinus, UserPlus, createIcons } from "lucide";
+import { BrickWall, DoorOpen, Eraser, EyeOff, LandPlot, RefreshCw, Upload, UserMinus, UserPlus, createIcons } from "lucide";
 import { GRID_CELL_SIZE, TOKEN_STEP_ANIMATION_MS } from "./constants";
 import { mustGetCanvasContext, mustQuery } from "./dom";
 import { add, rotate } from "./geometry";
@@ -74,6 +74,7 @@ const wallModeButton = mustQuery<HTMLButtonElement>("#wall-mode-button");
 const doorModeButton = mustQuery<HTMLButtonElement>("#door-mode-button");
 const roomModeButton = mustQuery<HTMLButtonElement>("#room-mode-button");
 const clearWallsButton = mustQuery<HTMLButtonElement>("#clear-walls-button");
+const logicMapVisibilityButton = mustQuery<HTMLButtonElement>("#logic-map-visibility-button");
 const switchIdentityButton = mustQuery<HTMLButtonElement>("#switch-identity-button");
 const identityBadge = mustQuery<HTMLSpanElement>("#identity-badge");
 const dropOverlay = mustQuery<HTMLDivElement>("#drop-overlay");
@@ -115,6 +116,7 @@ createIcons({
     BrickWall,
     DoorOpen,
     Eraser,
+    EyeOff,
     LandPlot,
     RefreshCw,
     Upload,
@@ -164,6 +166,7 @@ let interaction: Interaction | null = null;
 let appMode: AppMode = "play";
 let editMode: EditMode = "background";
 let logicTool: LogicTool = "wall";
+let isLogicMapVisible = true;
 let nextZ = 1;
 let nextTokenIndex = 1;
 let dragDepth = 0;
@@ -394,6 +397,10 @@ function isPlayMode(): boolean {
   return isLoggedIn() && appMode === "play";
 }
 
+function shouldShowLogicMap(): boolean {
+  return !isPlayMode() || isLogicMapVisible;
+}
+
 function canControlToken(token: SceneToken): boolean {
   return currentIdentity?.type === "admin" || currentIdentity?.id === token.id;
 }
@@ -403,7 +410,7 @@ function canInspectToken(): boolean {
 }
 
 function canInspectDoor(): boolean {
-  return isPlayMode() && isAdmin();
+  return isPlayMode() && isAdmin() && shouldShowLogicMap();
 }
 
 function canInspectRoom(): boolean {
@@ -650,6 +657,7 @@ function render(): void {
       rooms: sceneRooms,
       selectedRoomId,
       previewRoomCells,
+      showLogicMap: shouldShowLogicMap(),
       previewPath,
       selectedImage: getSelectedImage(),
       selectedTokenId,
@@ -960,6 +968,15 @@ function setLogicTool(nextTool: LogicTool): void {
   updateModeControls();
 }
 
+function setLogicMapVisible(visible: boolean): void {
+  isLogicMapVisible = visible;
+  if (!shouldShowLogicMap()) {
+    selectedDoorId = null;
+  }
+  updateModeControls();
+  updateSelectionPanel();
+}
+
 function updateModeControls(): void {
   if (!availableModes().includes(appMode)) {
     appMode = availableModes()[0];
@@ -979,6 +996,7 @@ function updateModeControls(): void {
       doorModeButton,
       roomModeButton,
       clearWallsButton,
+      logicMapVisibilityButton,
       resetSizeButton,
       layerUpButton,
       layerDownButton,
@@ -990,6 +1008,7 @@ function updateModeControls(): void {
       appMode,
       editMode,
       logicTool,
+      isLogicMapVisible,
       isLoggedIn: isLoggedIn(),
       isAdmin: isAdmin(),
     },
@@ -1403,6 +1422,14 @@ clearWallsButton.addEventListener("click", () => {
   blockedHorizontalEdges.clear();
   previewPath = [];
   networkClient.sendBlockedEdgesCleared();
+});
+
+logicMapVisibilityButton.addEventListener("click", () => {
+  if (!isPlayMode()) {
+    return;
+  }
+
+  setLogicMapVisible(!isLogicMapVisible);
 });
 
 uploadInput.addEventListener("change", () => {

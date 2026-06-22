@@ -33,6 +33,7 @@ export type RenderState = {
   rooms: SceneRoom[];
   selectedRoomId: string | null;
   previewRoomCells: Cell[];
+  showLogicMap: boolean;
   previewPath: Cell[];
   selectedImage: SceneImage | null;
   selectedTokenId: string | null;
@@ -53,9 +54,11 @@ export function renderScene(ctx: CanvasRenderingContext2D, viewport: Viewport, s
     drawImageEntity(ctx, viewport, image);
   }
 
-  drawRooms(ctx, viewport, state.rooms, state.selectedRoomId, state.previewRoomCells);
-  drawWalls(ctx, viewport, state.blockedVerticalEdges, state.blockedHorizontalEdges);
-  drawDoors(ctx, viewport, state.doors, state.selectedDoorId);
+  if (state.showLogicMap) {
+    drawRooms(ctx, viewport, state.rooms, state.selectedRoomId, state.previewRoomCells);
+    drawWalls(ctx, viewport, state.blockedVerticalEdges, state.blockedHorizontalEdges);
+    drawDoors(ctx, viewport, state.doors, state.selectedDoorId);
+  }
   if (state.previewPath.length > 0) {
     drawPath(ctx, viewport, state.previewPath);
   }

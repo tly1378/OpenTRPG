@@ -13,6 +13,7 @@ type ModeControls = {
   doorModeButton: HTMLButtonElement;
   roomModeButton: HTMLButtonElement;
   clearWallsButton: HTMLButtonElement;
+  logicMapVisibilityButton: HTMLButtonElement;
   resetSizeButton: HTMLButtonElement;
   layerUpButton: HTMLButtonElement;
   layerDownButton: HTMLButtonElement;
@@ -27,16 +28,18 @@ export function updateModeControls(
     appMode: AppMode;
     editMode: EditMode;
     logicTool: LogicTool;
+    isLogicMapVisible: boolean;
     isLoggedIn: boolean;
     isAdmin: boolean;
   },
 ): void {
-  const { appMode, editMode, logicTool, isLoggedIn, isAdmin } = params;
+  const { appMode, editMode, logicTool, isLogicMapVisible, isLoggedIn, isAdmin } = params;
   const isEditing = isLoggedIn && isAdmin && appMode === "edit";
   const isEditingBackground = isEditing && editMode === "background";
   const isEditingBlocking = isEditing && editMode === "blocking";
   const isEditingTokens = isEditing && editMode === "tokens";
   const isEditingRooms = isEditing && editMode === "rooms";
+  const isPlaying = isLoggedIn && appMode === "play";
 
   controls.modeSelect.value = appMode;
   controls.modeSelect.disabled = !isLoggedIn || !isAdmin;
@@ -60,6 +63,12 @@ export function updateModeControls(
   controls.roomModeButton.classList.toggle("is-hidden", !isEditingRooms);
   controls.clearWallsButton.disabled = !isEditingBlocking;
   controls.clearWallsButton.classList.toggle("is-hidden", !isEditingBlocking);
+  controls.logicMapVisibilityButton.disabled = !isPlaying;
+  controls.logicMapVisibilityButton.classList.toggle("is-hidden", !isPlaying);
+  controls.logicMapVisibilityButton.classList.toggle("is-active", isPlaying && isLogicMapVisible);
+  controls.logicMapVisibilityButton.setAttribute("aria-pressed", String(isPlaying && isLogicMapVisible));
+  controls.logicMapVisibilityButton.setAttribute("aria-label", isLogicMapVisible ? "隐藏逻辑地图" : "显示逻辑地图");
+  controls.logicMapVisibilityButton.dataset.tooltip = isLogicMapVisible ? "隐藏逻辑地图" : "显示逻辑地图";
   controls.resetSizeButton.disabled = !isEditingBackground;
   controls.layerUpButton.disabled = !isEditingBackground;
   controls.layerDownButton.disabled = !isEditingBackground;
