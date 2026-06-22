@@ -356,19 +356,36 @@ function drawTokens(ctx: CanvasRenderingContext2D, viewport: Viewport, state: Re
       ctx.fill();
     }
 
-    ctx.strokeStyle = isSelected ? "#ffffff" : "rgb(255 255 255 / 0.76)";
-    ctx.lineWidth = isSelected ? 4 : 2;
-    ctx.stroke();
+    drawTokenOutline(ctx, screenPoint, radius, isSelected);
 
-    if (!avatarImage) {
-      ctx.fillStyle = "#0f172a";
-      ctx.font = `${Math.max(12, 14 * viewport.camera.zoom)}px ui-sans-serif, system-ui, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(token.name, screenPoint.x, screenPoint.y);
-    }
+    drawTokenName(ctx, token.name, screenPoint, radius, viewport.camera.zoom);
     ctx.restore();
   }
+}
+
+function drawTokenOutline(ctx: CanvasRenderingContext2D, screenPoint: Vector2, radius: number, isSelected: boolean): void {
+  const lineWidth = isSelected ? 4 : 2;
+  const outlineRadius = isSelected ? radius + lineWidth / 2 : radius;
+
+  ctx.beginPath();
+  ctx.arc(screenPoint.x, screenPoint.y, outlineRadius, 0, Math.PI * 2);
+  ctx.strokeStyle = isSelected ? "#ffffff" : "rgb(255 255 255 / 0.76)";
+  ctx.lineWidth = lineWidth;
+  ctx.stroke();
+}
+
+function drawTokenName(
+  ctx: CanvasRenderingContext2D,
+  name: string,
+  screenPoint: Vector2,
+  radius: number,
+  zoom: number,
+): void {
+  ctx.fillStyle = "rgb(255 255 255 / 0.82)";
+  ctx.font = `${Math.max(12, 14 * zoom)}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillText(name, screenPoint.x, screenPoint.y + radius + Math.max(4, 6 * zoom));
 }
 
 function drawTokenAvatar(
