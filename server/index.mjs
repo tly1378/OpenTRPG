@@ -581,6 +581,23 @@ function handleSceneImageUpdate(client, message) {
   broadcastSceneSnapshot();
 }
 
+function handleSceneImageDelete(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  const imageId = String(message.imageId ?? "");
+  const imageIndex = sceneImages.findIndex((candidate) => candidate.id === imageId);
+  if (imageIndex === -1) {
+    return;
+  }
+
+  sceneImages.splice(imageIndex, 1);
+  normalizeImageZIndexes();
+  client.lastSeenAt = Date.now();
+  broadcastSceneSnapshot();
+}
+
 function handleSceneImagesUpdate(client, message) {
   if (client.identity.type !== "admin" || !Array.isArray(message.images)) {
     return;
@@ -774,6 +791,20 @@ function handleRoomUpdate(client, message) {
   broadcastSceneSnapshot();
 }
 
+function handleRoomDelete(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  const roomId = String(message.roomId ?? "");
+  if (!sceneRooms.delete(roomId)) {
+    return;
+  }
+
+  client.lastSeenAt = Date.now();
+  broadcastSceneSnapshot();
+}
+
 function handleChatDice(client, message) {
   if (client.identity.type === "lobby") {
     return;
@@ -872,6 +903,11 @@ wss.on("connection", (socket) => {
       return;
     }
 
+    if (message.type === "scene:image-delete") {
+      handleSceneImageDelete(client, message);
+      return;
+    }
+
     if (message.type === "scene:images-update") {
       handleSceneImagesUpdate(client, message);
       return;
@@ -909,6 +945,11 @@ wss.on("connection", (socket) => {
 
     if (message.type === "scene:room-update") {
       handleRoomUpdate(client, message);
+      return;
+    }
+
+    if (message.type === "scene:room-delete") {
+      handleRoomDelete(client, message);
       return;
     }
 

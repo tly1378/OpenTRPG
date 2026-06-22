@@ -105,11 +105,13 @@ const selectionEyebrow = mustQuery<HTMLDivElement>("#selection-eyebrow");
 const selectionTitle = mustQuery<HTMLDivElement>("#selection-title");
 const imageSelectionControls = mustQuery<HTMLDivElement>("#image-selection-controls");
 const imageSelectionActions = mustQuery<HTMLDivElement>("#image-selection-actions");
+const imageSelectionDanger = mustQuery<HTMLDivElement>("#image-selection-danger");
 const resetSizeButton = mustQuery<HTMLButtonElement>("#reset-size");
 const layerUpButton = mustQuery<HTMLButtonElement>("#layer-up");
 const layerDownButton = mustQuery<HTMLButtonElement>("#layer-down");
 const layerTopButton = mustQuery<HTMLButtonElement>("#layer-top");
 const layerBottomButton = mustQuery<HTMLButtonElement>("#layer-bottom");
+const deleteImageButton = mustQuery<HTMLButtonElement>("#delete-image");
 const tokenSelectionForm = mustQuery<HTMLFormElement>("#token-selection-form");
 const tokenNameDisplay = mustQuery<HTMLDivElement>("#token-name-display");
 const tokenNameValue = mustQuery<HTMLSpanElement>("#token-name-value");
@@ -129,6 +131,7 @@ const doorSelectionForm = mustQuery<HTMLFormElement>("#door-selection-form");
 const doorBlocksMovementInput = mustQuery<HTMLInputElement>("#door-blocks-movement-input");
 const roomSelectionForm = mustQuery<HTMLFormElement>("#room-selection-form");
 const roomNameInput = mustQuery<HTMLInputElement>("#room-name-input");
+const deleteRoomButton = mustQuery<HTMLButtonElement>("#delete-room");
 const avatarEditorOverlay = mustQuery<HTMLElement>("#avatar-editor-overlay");
 const avatarEditorStage = mustQuery<HTMLDivElement>("#avatar-editor-stage");
 const avatarEditorImage = mustQuery<HTMLImageElement>("#avatar-editor-image");
@@ -1174,8 +1177,13 @@ function hitTestToken(worldPoint: Vector2): SceneToken | null {
   return findHitToken(sceneTokens, worldPoint, { interaction, movingTokens, previewTokenPosition }, camera.zoom);
 }
 
+function hitTestRoom(worldPoint: Vector2): SceneRoom | null {
+  const targetCell = worldToCell(worldPoint);
+  return [...sceneRooms].reverse().find((room) => room.cells.some((cell) => sameCell(cell, targetCell))) ?? null;
+}
+
 function updateRoomPreview(worldPoint: Vector2): void {
-  previewRoomCells = isEditingRooms() ? closedRegionAt(worldPoint) : [];
+  previewRoomCells = isEditingRooms() && logicTool === "room" ? closedRegionAt(worldPoint) : [];
 }
 
 function hitTestResizeHandle(screenPoint: Vector2) {
@@ -1200,13 +1208,16 @@ function setCursor(screenPoint: Vector2): void {
 
   const tokenHit = hitTestToken(worldPoint);
   const doorHit = canInspectDoor() ? hitTestDoor(worldPoint) : null;
+  const roomHit = isEditingRooms() && logicTool === "inspect-room" ? hitTestRoom(worldPoint) : null;
 
   if (isEditingBackground() && hitTestRotateHandle(screenPoint)) {
     canvas.style.cursor = "grab";
   } else if (isEditingBackground() && resizeHandle) {
     canvas.style.cursor = getResizeCursor(resizeHandle);
-  } else if ((isEditingBlocking() && (logicTool === "wall" || logicTool === "door")) || isEditingRooms()) {
+  } else if ((isEditingBlocking() && (logicTool === "wall" || logicTool === "door")) || (isEditingRooms() && logicTool === "room")) {
     canvas.style.cursor = "crosshair";
+  } else if (roomHit) {
+    canvas.style.cursor = "pointer";
   } else if (doorHit) {
     canvas.style.cursor = "pointer";
   } else if (isPlayMode() && tokenHit && canControlToken(tokenHit)) {
@@ -1262,6 +1273,7 @@ function updateSelectionPanel(): void {
     selectionTitle.textContent = selectedImage.name;
     imageSelectionControls.hidden = false;
     imageSelectionActions.hidden = false;
+    imageSelectionDanger.hidden = false;
     doorSelectionForm.hidden = true;
     roomSelectionForm.hidden = true;
   }
@@ -1272,6 +1284,7 @@ function updateSelectionPanel(): void {
     selectionTitle.textContent = `${selectedDoor.type === "vertical" ? "纵向" : "横向"}门 (${selectedDoor.x}, ${selectedDoor.y})`;
     imageSelectionControls.hidden = true;
     imageSelectionActions.hidden = true;
+    imageSelectionDanger.hidden = true;
     doorSelectionForm.hidden = false;
     roomSelectionForm.hidden = true;
     doorBlocksMovementInput.checked = !selectedDoor.isOpen;
@@ -1284,6 +1297,7 @@ function updateSelectionPanel(): void {
     selectionTitle.textContent = selectedRoom.name || "未命名房间";
     imageSelectionControls.hidden = true;
     imageSelectionActions.hidden = true;
+    imageSelectionDanger.hidden = true;
     doorSelectionForm.hidden = true;
     roomSelectionForm.hidden = false;
     if (document.activeElement !== roomNameInput) {
@@ -1432,7 +1446,7 @@ function setEditMode(nextMode: EditMode): void {
   if (editMode === "blocking" && logicTool !== "wall" && logicTool !== "door") {
     logicTool = "wall";
   } else if (editMode === "rooms") {
-    logicTool = "room";
+    logicTool = "inspect-room";
   }
 
   if (!isEditingBackground()) {
@@ -1490,6 +1504,7 @@ function updateModeControls(): void {
       layerDownButton,
       layerTopButton,
       layerBottomButton,
+      deleteImageButton,
       canvas,
     },
     {
@@ -1715,6 +1730,24 @@ function updateSelectedRoomName(name: string): void {
   updateSelectionPanel();
 }
 
+function deleteSelectedRoom(): void {
+  const selectedRoom = getSelectedRoom();
+  if (!selectedRoom || !canInspectRoom()) {
+    return;
+  }
+
+  const roomIndex = sceneRooms.findIndex((room) => room.id === selectedRoom.id);
+  if (roomIndex === -1) {
+    return;
+  }
+
+  sceneRooms.splice(roomIndex, 1);
+  selectedRoomId = null;
+  previewRoomCells = [];
+  updateSelectionPanel();
+  networkClient.sendRoomDeleted(selectedRoom.id);
+}
+
 function addImageElement(imageElement: HTMLImageElement, src: string, name: string, worldPoint: Vector2): void {
   const entity = createSceneImage(imageElement, src, name, worldPoint, nextZ++);
 
@@ -1756,6 +1789,31 @@ function resetSelectedImageSize(): void {
 
   resetImageSize(selectedImage);
   networkClient.sendImageUpdated(sceneImageSnapshot(selectedImage));
+}
+
+function deleteSelectedImage(): void {
+  const selectedImage = getSelectedImage();
+  if (!selectedImage || !isEditingBackground()) {
+    return;
+  }
+
+  const imageIndex = sceneImages.findIndex((image) => image.id === selectedImage.id);
+  if (imageIndex === -1) {
+    return;
+  }
+
+  sceneImages.splice(imageIndex, 1);
+  normalizeZIndexes();
+  selectedImageId = null;
+  if (
+    interaction &&
+    (interaction.type === "move-image" || interaction.type === "resize-image" || interaction.type === "rotate-image") &&
+    interaction.imageId === selectedImage.id
+  ) {
+    interaction = null;
+  }
+  updateSelectionPanel();
+  networkClient.sendImageDeleted(selectedImage.id);
 }
 
 function syncTokenInstanceFromCharacter(character: SceneCharacter): void {
@@ -1995,12 +2053,17 @@ doorModeButton.addEventListener("click", () => {
 
 roomModeButton.addEventListener("click", () => {
   if (isEditingRooms()) {
-    setLogicTool("room");
+    setLogicTool(logicTool === "room" ? "inspect-room" : "room");
   }
 });
 
 clearWallsButton.addEventListener("click", () => {
   if (!isEditingBlocking()) {
+    return;
+  }
+
+  const shouldClearWalls = window.confirm("确定要清空所有阻挡边和门吗？此操作会同步到所有客户端。");
+  if (!shouldClearWalls) {
     return;
   }
 
@@ -2087,14 +2150,22 @@ canvas.addEventListener("pointerdown", (event) => {
   if (isEditingBlocking() || isEditingRooms()) {
     selectedImageId = null;
     selectedTokenId = null;
-    selectedRoomId = null;
-    updateSelectionPanel();
 
     if (isEditingRooms()) {
+      if (logicTool !== "room") {
+        selectRoom(hitTestRoom(worldPoint)?.id ?? null);
+        return;
+      }
+
+      selectedRoomId = null;
+      updateSelectionPanel();
       const region = previewRoomCells.length > 0 ? previewRoomCells : closedRegionAt(worldPoint);
       selectRoomFromCells(region);
       return;
     }
+
+    selectedRoomId = null;
+    updateSelectionPanel();
 
     if (!isEditingBlocking()) {
       return;
@@ -2429,6 +2500,8 @@ layerUpButton.addEventListener("click", () => moveLayer("up"));
 layerDownButton.addEventListener("click", () => moveLayer("down"));
 layerTopButton.addEventListener("click", () => moveLayer("top"));
 layerBottomButton.addEventListener("click", () => moveLayer("bottom"));
+deleteImageButton.addEventListener("click", deleteSelectedImage);
+deleteRoomButton.addEventListener("click", deleteSelectedRoom);
 diceOptionButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const sides = parseDiceButton(button);

@@ -163,6 +163,13 @@ export class NetworkClient {
     });
   }
 
+  sendImageDeleted(imageId: string): void {
+    this.send({
+      type: "scene:image-delete",
+      imageId,
+    });
+  }
+
   sendTokenMoved(token: SceneToken, path: Cell[]): void {
     this.send({
       type: "scene:token-move",
@@ -216,6 +223,13 @@ export class NetworkClient {
     this.send({
       type: "scene:room-update",
       room,
+    });
+  }
+
+  sendRoomDeleted(roomId: string): void {
+    this.send({
+      type: "scene:room-delete",
+      roomId,
     });
   }
 

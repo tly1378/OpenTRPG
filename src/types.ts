@@ -16,7 +16,7 @@ export type ClientPointEvent = {
 export type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 export type AppMode = "edit" | "play";
 export type EditMode = "background" | "blocking" | "rooms";
-export type LogicTool = "wall" | "door" | "room";
+export type LogicTool = "wall" | "door" | "room" | "inspect-room";
 export type WallEdgeType = "vertical" | "horizontal";
 
 export type GridIntersection = {

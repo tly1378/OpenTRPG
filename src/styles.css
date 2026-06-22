@@ -1254,6 +1254,11 @@ button {
   gap: 8px;
 }
 
+.image-selection-danger,
+.room-selection-danger {
+  margin-top: 16px;
+}
+
 .primary-panel-action,
 .selection-actions button {
   border: 1px solid rgb(255 255 255 / 12%);

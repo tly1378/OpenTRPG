@@ -17,6 +17,7 @@ type ModeControls = {
   layerDownButton: HTMLButtonElement;
   layerTopButton: HTMLButtonElement;
   layerBottomButton: HTMLButtonElement;
+  deleteImageButton: HTMLButtonElement;
   canvas: HTMLCanvasElement;
 };
 
@@ -67,16 +68,17 @@ export function updateModeControls(
   controls.layerDownButton.disabled = !isEditingBackground;
   controls.layerTopButton.disabled = !isEditingBackground;
   controls.layerBottomButton.disabled = !isEditingBackground;
+  controls.deleteImageButton.disabled = !isEditingBackground;
 
   controls.wallModeButton.classList.toggle("is-active", isEditingBlocking && logicTool === "wall");
   controls.doorModeButton.classList.toggle("is-active", isEditingBlocking && logicTool === "door");
-  controls.roomModeButton.classList.toggle("is-active", isEditingRooms);
+  controls.roomModeButton.classList.toggle("is-active", isEditingRooms && logicTool === "room");
   controls.wallModeButton.setAttribute("aria-pressed", String(isEditingBlocking && logicTool === "wall"));
   controls.doorModeButton.setAttribute("aria-pressed", String(isEditingBlocking && logicTool === "door"));
-  controls.roomModeButton.setAttribute("aria-pressed", String(isEditingRooms));
+  controls.roomModeButton.setAttribute("aria-pressed", String(isEditingRooms && logicTool === "room"));
   controls.canvas.classList.toggle(
     "is-wall-mode",
-    (isEditingBlocking && (logicTool === "wall" || logicTool === "door")) || isEditingRooms,
+    (isEditingBlocking && (logicTool === "wall" || logicTool === "door")) || (isEditingRooms && logicTool === "room"),
   );
   controls.canvas.classList.toggle("is-art-mode", isEditingBackground);
   controls.canvas.classList.toggle("is-play-mode", isLoggedIn && appMode === "play");
