@@ -1,10 +1,19 @@
 import { diceSides, type DiceSides } from "../core/appState";
+import type { DiceRollVisibility } from "../core/types";
 
 type DiceRollMessage = {
   kind: "dice";
   formula: string;
   total: number;
   detail: string;
+  tokenId?: string | null;
+  rollVisibility?: DiceRollVisibility | null;
+};
+
+export type DiceFocusLabelState = {
+  text: string;
+  toggleable: boolean;
+  visibility: DiceRollVisibility | null;
 };
 
 export class DiceController {
@@ -13,15 +22,25 @@ export class DiceController {
   constructor(
     private readonly elements: {
       panel: HTMLElement;
+      focusLabel: HTMLButtonElement;
       optionButtons: HTMLButtonElement[];
       adjustButtons: HTMLButtonElement[];
       rollButton: HTMLButtonElement;
       modifierInput: HTMLInputElement;
     },
     private readonly canUseDicePanel: () => boolean,
+    private readonly getRollTargetTokenId: () => string | null,
+    private readonly getRollVisibility: () => DiceRollVisibility,
+    private readonly getFocusLabel: () => DiceFocusLabelState | null,
+    private readonly toggleRollVisibility: () => void,
     private readonly sendDiceChatMessage: (message: DiceRollMessage) => void,
-    private readonly openChatPanel: () => void,
-  ) {}
+  ) {
+    this.elements.focusLabel.addEventListener("click", () => {
+      if (this.getFocusLabel()?.toggleable) {
+        this.toggleRollVisibility();
+      }
+    });
+  }
 
   parseButton(button: HTMLButtonElement): DiceSides | null {
     const sides = Number(button.dataset.die);
@@ -30,6 +49,23 @@ export class DiceController {
 
   render(): void {
     this.elements.panel.hidden = !this.canUseDicePanel();
+
+    const focusLabel = this.getFocusLabel();
+    if (focusLabel === null) {
+      this.elements.focusLabel.hidden = true;
+      this.elements.focusLabel.textContent = "";
+      this.elements.focusLabel.classList.remove("is-toggle", "is-character", "is-public");
+    } else {
+      this.elements.focusLabel.hidden = false;
+      this.elements.focusLabel.textContent = focusLabel.text;
+      this.elements.focusLabel.classList.toggle("is-toggle", focusLabel.toggleable);
+      this.elements.focusLabel.classList.toggle("is-character", !focusLabel.toggleable);
+      this.elements.focusLabel.classList.toggle("is-public", focusLabel.visibility === "public");
+      this.elements.focusLabel.setAttribute(
+        "aria-label",
+        focusLabel.toggleable ? `当前为${focusLabel.text}，点击切换` : `聚焦 ${focusLabel.text}`,
+      );
+    }
 
     for (const button of this.elements.optionButtons) {
       const sides = this.parseButton(button);
@@ -95,6 +131,8 @@ export class DiceController {
     const details: string[] = [];
     const modifier = this.getModifier();
     const formula = this.formatSelection();
+    const tokenId = this.getRollTargetTokenId();
+    const rollVisibility = tokenId === null ? (this.getRollVisibility() ?? "hidden") : null;
 
     for (const sides of diceSides) {
       const count = this.selectedDice.get(sides) ?? 0;
@@ -120,8 +158,9 @@ export class DiceController {
       formula,
       total,
       detail: details.join(" · "),
+      tokenId,
+      rollVisibility,
     });
-    this.openChatPanel();
     this.clearSelection();
   }
 

@@ -68,7 +68,10 @@
 
       <aside id="dice-panel" class="dice-panel" aria-label="骰子投掷器" hidden>
         <div class="dice-panel-heading">
-          <h2>投骰子</h2>
+          <div class="dice-panel-title-row">
+            <h2>投骰子</h2>
+            <button id="dice-focus-label" class="dice-focus-label" type="button" hidden aria-label="切换投骰可见性"></button>
+          </div>
           <button id="dice-clear" class="dice-clear-button" type="button">清空</button>
         </div>
         <div id="dice-options" class="dice-options" aria-label="选择要投掷的骰子">

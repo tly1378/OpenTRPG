@@ -21,6 +21,16 @@ export function queryDomRefs() {
   latencyPanel.hidden = true;
   document.body.append(latencyPanel);
 
+  const diceOverlayRoot = document.createElement("div");
+  diceOverlayRoot.className = "dice-overlay-root";
+  diceOverlayRoot.setAttribute("aria-hidden", "true");
+  document.body.append(diceOverlayRoot);
+
+  const diceHiddenLogContainer = document.createElement("div");
+  diceHiddenLogContainer.className = "dice-hidden-log";
+  diceHiddenLogContainer.hidden = true;
+  document.body.append(diceHiddenLogContainer);
+
   createIcons({
     icons: {
       BrickWall,
@@ -46,6 +56,8 @@ export function queryDomRefs() {
     canvas,
     ctx,
     latencyPanel,
+    diceOverlayRoot,
+    diceHiddenLogContainer,
     identityScreen: mustQuery<HTMLElement>("#identity-screen"),
     identityList: mustQuery<HTMLDivElement>("#identity-list"),
     modeSelectLabel: mustQuery<HTMLLabelElement>(".mode-select-label"),
@@ -111,6 +123,7 @@ export function queryDomRefs() {
     cancelAvatarEditButton: mustQuery<HTMLButtonElement>("#cancel-avatar-edit"),
     saveAvatarEditButton: mustQuery<HTMLButtonElement>("#save-avatar-edit"),
     dicePanel: mustQuery<HTMLElement>("#dice-panel"),
+    diceFocusLabel: mustQuery<HTMLButtonElement>("#dice-focus-label"),
     diceOptionButtons: Array.from(document.querySelectorAll<HTMLButtonElement>(".dice-option")),
     diceAdjustButtons: Array.from(document.querySelectorAll<HTMLButtonElement>(".dice-adjust-button[data-die]")),
     diceRollButton: mustQuery<HTMLButtonElement>("#dice-roll"),

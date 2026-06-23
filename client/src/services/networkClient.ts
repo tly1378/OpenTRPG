@@ -233,7 +233,9 @@ export class NetworkClient {
     });
   }
 
-  sendDiceChatMessage(message: Pick<DiceChatMessage, "kind" | "formula" | "total" | "detail">): void {
+  sendDiceChatMessage(
+    message: Pick<DiceChatMessage, "kind" | "formula" | "total" | "detail" | "tokenId" | "rollVisibility">,
+  ): void {
     this.send({
       type: "chat:dice",
       message,

@@ -83,12 +83,30 @@ function broadcastSceneSnapshot() {
   }
 }
 
-function chatHistoryPayload(serverTime = Date.now()) {
+function chatHistoryPayload(serverTime = Date.now(), client = null) {
+  const messages =
+    client === null
+      ? chatMessages
+      : chatMessages.filter((message) => canClientSeeChatMessage(client, message));
+
   return {
     type: "chat:history",
-    messages: chatMessages,
+    messages,
     serverTime,
   };
+}
+
+function canClientSeeChatMessage(client, message) {
+  if (
+    message.kind === "dice" &&
+    message.authorType === "admin" &&
+    !message.tokenId &&
+    message.rollVisibility !== "public"
+  ) {
+    return client.identity.type === "admin";
+  }
+
+  return true;
 }
 
 function broadcastChatMessage(message) {
@@ -99,7 +117,9 @@ function broadcastChatMessage(message) {
   };
 
   for (const client of clients.values()) {
-    sendJson(client.socket, payload);
+    if (canClientSeeChatMessage(client, message)) {
+      sendJson(client.socket, payload);
+    }
   }
 }
 
@@ -348,11 +368,17 @@ function normalizeDiceChatMessage(message) {
     return null;
   }
 
+  const tokenId = message.tokenId == null ? null : String(message.tokenId).trim().slice(0, 64) || null;
+  const rollVisibility =
+    message.rollVisibility === "public" || message.rollVisibility === "hidden" ? message.rollVisibility : null;
+
   return {
     kind: "dice",
     formula,
     total: Math.trunc(message.total),
     detail,
+    tokenId,
+    rollVisibility,
   };
 }
 
@@ -445,7 +471,7 @@ function handleHello(client, message) {
   });
   broadcastStatus();
   sendJson(client.socket, sceneSnapshotPayload(client.lastSeenAt));
-  sendJson(client.socket, chatHistoryPayload(client.lastSeenAt));
+  sendJson(client.socket, chatHistoryPayload(client.lastSeenAt, client));
 }
 
 function handlePong(client, message) {
@@ -822,6 +848,12 @@ function handleChatDice(client, message) {
   const diceMessage = normalizeDiceChatMessage(message.message);
   if (!diceMessage) {
     return;
+  }
+
+  if (client.identity.type === "admin" && !diceMessage.tokenId) {
+    diceMessage.rollVisibility = diceMessage.rollVisibility === "public" ? "public" : "hidden";
+  } else {
+    diceMessage.rollVisibility = null;
   }
 
   const now = Date.now();

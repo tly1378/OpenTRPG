@@ -95,11 +95,15 @@ export type ChatMessageBase = {
   createdAt: number;
 };
 
+export type DiceRollVisibility = "hidden" | "public";
+
 export type DiceChatMessage = ChatMessageBase & {
   kind: "dice";
   formula: string;
   total: number;
   detail: string;
+  tokenId?: string | null;
+  rollVisibility?: DiceRollVisibility | null;
 };
 
 export type MoveChatMessage = ChatMessageBase & {

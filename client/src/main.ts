@@ -7,6 +7,7 @@ import { installCanvasInteractions } from "./modules/canvas/canvasInteractions";
 import { createAppContext } from "./core/appContext";
 import { createAppState } from "./core/appState";
 import { DiceController } from "./controllers/diceController";
+import { DiceRollDisplayController } from "./controllers/diceRollDisplayController";
 import { queryDomRefs } from "./controllers/domRefs";
 import { installControlEventHandlers } from "./controllers/eventHandlers";
 import { LogicMapController } from "./controllers/logicMapController";
@@ -54,6 +55,7 @@ import { renderScene } from "./modules/canvas/renderer";
 import type {
   AppMode,
   Cell,
+  DiceRollVisibility,
   EditMode,
   Identity,
   Interaction,
@@ -76,6 +78,8 @@ const {
   canvas,
   ctx,
   latencyPanel,
+  diceOverlayRoot,
+  diceHiddenLogContainer,
   identityScreen,
   identityList,
   modeSelectLabel,
@@ -141,6 +145,7 @@ const {
   cancelAvatarEditButton,
   saveAvatarEditButton,
   dicePanel,
+  diceFocusLabel,
   diceOptionButtons,
   diceAdjustButtons,
   diceRollButton,
@@ -191,6 +196,7 @@ let {
   previewWallTargetBlocked,
   tokenNameEditing,
 } = appState;
+let adminUnfocusedRollVisibility: "hidden" | "public" = "hidden";
 const latencyPanelController = new LatencyPanelController(latencyPanel, isLoggedIn);
 const chatPanelController = new ChatPanelController(
   {
@@ -200,17 +206,38 @@ const chatPanelController = new ChatPanelController(
   },
   isPlayMode,
 );
+const diceRollDisplayController = new DiceRollDisplayController(
+  diceOverlayRoot,
+  diceHiddenLogContainer,
+  latencyPanel,
+  {
+    isAdmin,
+    isLoggedIn,
+    tokens: () => sceneTokens,
+    getTokenRenderState: () => ({
+      interaction,
+      movingTokens,
+      previewTokenPosition,
+    }),
+    worldToScreen,
+    cameraZoom: () => camera.zoom,
+  },
+);
 const diceController = new DiceController(
   {
     panel: dicePanel,
+    focusLabel: diceFocusLabel,
     optionButtons: diceOptionButtons,
     adjustButtons: diceAdjustButtons,
     rollButton: diceRollButton,
     modifierInput: diceModifierInput,
   },
   () => isLoggedIn() && appMode === "play",
+  getRollTargetTokenId,
+  getAdminRollVisibility,
+  getDiceFocusLabel,
+  toggleAdminRollVisibility,
   (message) => networkClient.sendDiceChatMessage(message),
-  () => setChatPanelOpen(true),
 );
 const characterPanelController = new CharacterPanelController(
   {
@@ -251,6 +278,7 @@ const avatarEditorController = new AvatarEditorController(
 const networkClient = createNetworkSyncAdapter({
   latencyPanel: latencyPanelController,
   chatPanel: chatPanelController,
+  diceRollDisplay: diceRollDisplayController,
   applySceneSnapshot,
 });
 
@@ -278,6 +306,7 @@ const appContext = createAppContext({
     getSelectedTokenId: () => selectedTokenId,
     setSelectedTokenId: (tokenId: string | null) => {
       selectedTokenId = tokenId;
+      renderDicePanel();
     },
     getInspectedCharacterId: () => inspectedCharacterId,
     setInspectedCharacterId: (characterId: string | null) => {
@@ -473,6 +502,56 @@ function renderCharacterPanel(): void {
 
 function setCharacterPanelOpen(open: boolean): void {
   characterPanelController.setOpen(open);
+}
+
+function getRollTargetTokenId(): string | null {
+  if (!isLoggedIn() || appMode !== "play") {
+    return null;
+  }
+
+  if (isAdmin()) {
+    return getSelectedToken()?.id ?? null;
+  }
+
+  if (currentIdentity?.type === "player") {
+    return currentIdentity.id;
+  }
+
+  return null;
+}
+
+function getAdminRollVisibility(): DiceRollVisibility {
+  if (!isAdmin() || appMode !== "play" || getRollTargetTokenId() !== null) {
+    return "hidden";
+  }
+
+  return adminUnfocusedRollVisibility;
+}
+
+function getDiceFocusLabel(): { text: string; toggleable: boolean; visibility: DiceRollVisibility | null } | null {
+  if (!isAdmin() || appMode !== "play") {
+    return null;
+  }
+
+  const token = getSelectedToken();
+  if (token) {
+    return {
+      text: token.name,
+      toggleable: false,
+      visibility: null,
+    };
+  }
+
+  return {
+    text: adminUnfocusedRollVisibility === "hidden" ? "暗投" : "明投",
+    toggleable: true,
+    visibility: adminUnfocusedRollVisibility,
+  };
+}
+
+function toggleAdminRollVisibility(): void {
+  adminUnfocusedRollVisibility = adminUnfocusedRollVisibility === "hidden" ? "public" : "hidden";
+  renderDicePanel();
 }
 
 function renderDicePanel(): void {
@@ -678,6 +757,7 @@ function render(): void {
 function tick(): void {
   updateMovingTokenAnimation();
   render();
+  diceRollDisplayController.updatePositions();
   updateSelectionPanel();
   requestAnimationFrame(tick);
 }
@@ -856,6 +936,7 @@ function selectImage(imageId: string | null): void {
     selectedTokenId = null;
     closeTokenInspector();
     selectedDoorId = null;
+    renderDicePanel();
   }
   updateSelectionPanel();
 }
@@ -872,6 +953,7 @@ function selectToken(tokenId: string | null, inspect = false): void {
   } else {
     selectedTokenId = null;
   }
+  renderDicePanel();
   updateSelectionPanel();
 }
 
@@ -882,6 +964,7 @@ function selectDoor(door: SceneDoor | null): void {
     selectedTokenId = null;
     closeTokenInspector();
     selectedRoomId = null;
+    renderDicePanel();
   }
   updateSelectionPanel();
 }
@@ -893,6 +976,7 @@ function selectRoom(roomId: string | null): void {
     selectedTokenId = null;
     closeTokenInspector();
     selectedDoorId = null;
+    renderDicePanel();
   }
   updateSelectionPanel();
 }
