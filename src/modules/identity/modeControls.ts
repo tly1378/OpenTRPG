@@ -1,4 +1,4 @@
-import type { AppMode, EditMode, LogicTool } from "./types";
+import type { AppMode, EditMode, LogicTool } from "../../core/types";
 
 type ModeControls = {
   modeSelectLabel: HTMLLabelElement;

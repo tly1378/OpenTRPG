@@ -125,26 +125,39 @@ npm run build
 
 ## 项目结构
 
-主要代码在 `src/` 下。`main.ts` 负责应用初始化、状态编排和事件绑定；具体算法和 UI 细节拆到了独立模块中。
+主要代码在 `src/` 下。`main.ts` 负责应用启动和高层编排；基础类型、工具函数、业务模块、控制器和服务层分别放在子目录中。
 
 ```text
 src/
-  main.ts            应用入口：DOM 接线、全局状态、事件绑定、模块编排
-  types.ts           共享类型：坐标、图片、角色、身份、交互状态
-  constants.ts       画布、网格、token、手柄等常量
-  dom.ts             DOM 查询和 Canvas context 获取
-  geometry.ts        向量计算、旋转、距离、缓动函数
-  viewport.ts        相机、屏幕/世界坐标转换、Canvas resize
-  grid.ts            网格坐标、阻挡边、角色占位、寻路规则
-  renderer.ts        Canvas 绘制：网格、墙、路径、角色、图片、选区
-  imageTransform.ts  背景图缩放/旋转手柄、等比缩放计算
-  hitTesting.ts      图片、角色、手柄的命中检测
-  imageImport.ts     图片文件加载、拖拽图片判断
-  identityUi.ts      身份选择列表、模式选项、身份标签文案
-  modeControls.ts    模式相关按钮的显示、禁用和激活状态
-  networkClient.ts   WebSocket 客户端、重连、延迟和在线列表状态
-  sceneActions.ts    创建图片/token、图片层级、还原尺寸等场景操作
-  styles.css         页面布局和 UI 样式
+  main.ts              应用入口：依赖装配、状态编排和启动流程
+  styles.css           页面布局和 UI 样式
+
+  core/                跨模块基础定义
+    types.ts           共享类型：坐标、图片、角色、身份、交互状态
+    constants.ts       画布、网格、token、手柄等常量
+    appState.ts        应用运行状态初始化
+
+  utilities/           通用工具函数
+    dom.ts             DOM 查询和 Canvas context 获取
+    geometry.ts        向量计算、旋转、距离、缓动函数
+
+  modules/             按功能域拆分的业务逻辑
+    canvas/            Canvas 渲染、命中检测、视口和指针交互
+    grid/              网格、寻路、墙/门/房间辅助逻辑
+    image/             图片导入、缩放、旋转和手柄计算
+    identity/          身份选择和模式控件 UI
+    scene/             场景实体创建、层级和尺寸操作
+
+  controllers/         UI/交互控制器和页面接线
+    avatarEditorController.ts
+    diceController.ts
+    panels.ts
+    eventHandlers.ts
+    domRefs.ts
+
+  services/            外部服务和同步适配
+    networkClient.ts   WebSocket 客户端、重连、延迟和在线列表状态
+    networkSync.ts     网络回调与 UI/场景状态的适配
 
 server/
   index.mjs          WebSocket 同步服务器和健康检查接口

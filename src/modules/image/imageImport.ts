@@ -1,4 +1,4 @@
-import type { Vector2 } from "./types";
+import type { Vector2 } from "../../core/types";
 
 export type LoadedImageFile = {
   image: HTMLImageElement;

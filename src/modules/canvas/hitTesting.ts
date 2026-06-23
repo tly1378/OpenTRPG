@@ -1,8 +1,8 @@
-import { HANDLE_RADIUS, TOKEN_RADIUS } from "./constants";
-import { distance, rotate, subtract } from "./geometry";
-import { getResizeHandlePositions, getRotateHandlePosition } from "./imageTransform";
+import { HANDLE_RADIUS, TOKEN_RADIUS } from "../../core/constants";
+import { distance, rotate, subtract } from "../../utilities/geometry";
+import { getResizeHandlePositions, getRotateHandlePosition } from "../image/imageTransform";
 import { tokenRenderPosition } from "./renderer";
-import type { Interaction, MovingToken, ResizeHandle, SceneImage, SceneToken, Vector2 } from "./types";
+import type { Interaction, MovingToken, ResizeHandle, SceneImage, SceneToken, Vector2 } from "../../core/types";
 
 type HitTestViewport = {
   zoom: number;

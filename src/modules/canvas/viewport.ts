@@ -1,4 +1,4 @@
-import type { ClientPointEvent, Vector2 } from "./types";
+import type { ClientPointEvent, Vector2 } from "../../core/types";
 
 export type Camera = {
   x: number;

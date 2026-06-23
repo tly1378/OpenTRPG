@@ -1,4 +1,4 @@
-import type { AppMode, EditMode, Identity, SceneCharacter } from "./types";
+import type { AppMode, EditMode, Identity, SceneCharacter } from "../../core/types";
 
 export const HOST_IDENTITY: Identity = { type: "admin", id: "host", name: "主持人" };
 

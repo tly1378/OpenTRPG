@@ -1,6 +1,6 @@
-import { MIN_IMAGE_SIZE, ROTATE_HANDLE_DISTANCE } from "./constants";
-import { add, rotate, subtract } from "./geometry";
-import type { Interaction, ResizeHandle, SceneImage, Vector2 } from "./types";
+import { MIN_IMAGE_SIZE, ROTATE_HANDLE_DISTANCE } from "../../core/constants";
+import { add, rotate, subtract } from "../../utilities/geometry";
+import type { Interaction, ResizeHandle, SceneImage, Vector2 } from "../../core/types";
 
 type ResizeResult = {
   centerLocal: Vector2;

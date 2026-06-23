@@ -1,5 +1,5 @@
-import { TOKEN_COLORS } from "./constants";
-import type { Cell, SceneCharacter, SceneImage, SceneToken } from "./types";
+import { TOKEN_COLORS } from "../../core/constants";
+import type { Cell, SceneCharacter, SceneImage, SceneToken } from "../../core/types";
 
 export function normalizeImageZIndexes(images: SceneImage[]): number {
   images

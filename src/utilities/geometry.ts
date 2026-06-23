@@ -1,4 +1,4 @@
-import type { Vector2 } from "./types";
+import type { Vector2 } from "../core/types";
 
 export function rotate(point: Vector2, radians: number): Vector2 {
   const cos = Math.cos(radians);

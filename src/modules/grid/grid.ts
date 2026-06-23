@@ -1,6 +1,6 @@
-import { GRID_CELL_SIZE } from "./constants";
-import { distance } from "./geometry";
-import type { Cell, SceneDoor, SceneToken, Vector2, WallEdgeType } from "./types";
+import { GRID_CELL_SIZE } from "../../core/constants";
+import { distance } from "../../utilities/geometry";
+import type { Cell, SceneDoor, SceneToken, Vector2, WallEdgeType } from "../../core/types";
 
 export function sameCell(a: Cell, b: Cell): boolean {
   return a.x === b.x && a.y === b.y;

@@ -9,7 +9,7 @@ import type {
   SceneRoom,
   SceneToken,
   WallEdgeType,
-} from "./types";
+} from "../core/types";
 
 export type ConnectionStatus = "offline" | "connecting" | "online";
 
