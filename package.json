@@ -1,13 +1,13 @@
 {
-  "name": "trpg-infinite-canvas",
+  "name": "opentrpg",
   "private": true,
   "workspaces": [
     "client",
     "server"
   ],
   "scripts": {
-    "client": "npm run dev -w trpg-client",
-    "server": "npm run start -w trpg-server",
-    "build": "npm run build -w trpg-client"
+    "client": "npm run dev -w opentrpg-client",
+    "server": "npm run start -w opentrpg-server",
+    "build": "npm run build -w opentrpg-client"
   }
 }
