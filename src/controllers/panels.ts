@@ -273,10 +273,22 @@ function createCharacterRow(options: {
   return row;
 }
 
+function createCharacterListSeparator(): HTMLDivElement {
+  const separator = document.createElement("div");
+  const label = document.createElement("span");
+
+  separator.className = "character-list-separator";
+  separator.setAttribute("role", "separator");
+  separator.setAttribute("aria-label", "NPC");
+  label.className = "character-list-separator-label";
+  label.textContent = "NPC";
+  separator.append(label);
+  return separator;
+}
+
 function renderCharacterList(
   list: HTMLDivElement,
   characters: SceneCharacter[],
-  emptyText: string,
   options: {
     tokens: SceneToken[];
     avatarImages: Map<string, { src: string; image: HTMLImageElement }>;
@@ -285,16 +297,34 @@ function renderCharacterList(
     openTokenInspector: (characterId: string) => void;
   },
 ): void {
+  const playerCharacters = characters.filter((character) => !character.isNpc);
+  const npcCharacters = characters.filter((character) => character.isNpc);
+
   if (characters.length === 0) {
     const empty = document.createElement("div");
     empty.className = "character-empty";
-    empty.textContent = emptyText;
+    empty.textContent = "还没有角色。";
     list.replaceChildren(empty);
     return;
   }
 
-  list.replaceChildren(
-    ...characters.map((character) =>
+  const elements: HTMLElement[] = playerCharacters.map((character) =>
+    createCharacterRow({
+      character,
+      tokens: options.tokens,
+      avatarImages: options.avatarImages,
+      isAdmin: options.isAdmin,
+      deleteCharacter: options.deleteCharacter,
+      openTokenInspector: options.openTokenInspector,
+    }),
+  );
+
+  if (playerCharacters.length > 0 && npcCharacters.length > 0) {
+    elements.push(createCharacterListSeparator());
+  }
+
+  elements.push(
+    ...npcCharacters.map((character) =>
       createCharacterRow({
         character,
         tokens: options.tokens,
@@ -305,6 +335,8 @@ function renderCharacterList(
       }),
     ),
   );
+
+  list.replaceChildren(...elements);
 }
 
 export class CharacterPanelController {
@@ -316,9 +348,6 @@ export class CharacterPanelController {
       toggleButton: HTMLButtonElement;
       addButton: HTMLButtonElement;
       list: HTMLDivElement;
-      npcSection: HTMLElement;
-      addNpcButton: HTMLButtonElement;
-      npcList: HTMLDivElement;
     },
     private readonly state: {
       canShowCharacters: () => boolean;
@@ -349,7 +378,7 @@ export class CharacterPanelController {
       this.panelOpen = false;
     }
 
-    const { panel, toggleButton, addButton, list, npcSection, addNpcButton, npcList } = this.elements;
+    const { panel, toggleButton, addButton, list } = this.elements;
     toggleButton.classList.toggle("is-hidden", !canShowCharacters);
     toggleButton.classList.toggle("is-active", canShowCharacters && this.panelOpen);
     toggleButton.disabled = !canShowCharacters;
@@ -359,25 +388,19 @@ export class CharacterPanelController {
     panel.classList.toggle("is-open", canShowCharacters && this.panelOpen);
     panel.setAttribute("aria-hidden", String(!canShowCharacters || !this.panelOpen));
     addButton.disabled = !canShowCharacters;
-    addNpcButton.disabled = !canShowCharacters;
-    npcSection.hidden = !canShowCharacters;
 
     const characters = this.state.characters();
-    const playerCharacters = characters.filter((character) => !character.isNpc);
-    const npcCharacters = characters.filter((character) => character.isNpc);
     const tokens = this.state.tokens();
     const avatarImages = this.state.avatarImages();
     const isAdmin = this.state.isAdmin();
-    const listOptions = {
+
+    renderCharacterList(list, characters, {
       tokens,
       avatarImages,
       isAdmin,
       deleteCharacter: this.actions.deleteCharacter,
       openTokenInspector: this.actions.openTokenInspector,
-    };
-
-    renderCharacterList(list, playerCharacters, "还没有玩家角色。", listOptions);
-    renderCharacterList(npcList, npcCharacters, "还没有 NPC。", listOptions);
+    });
 
     createIcons({
       icons: { Trash2 },

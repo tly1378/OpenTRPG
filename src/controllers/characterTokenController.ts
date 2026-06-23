@@ -58,21 +58,6 @@ export class CharacterTokenController {
     this.network.sendCharacterAdded(character);
   }
 
-  addNpcCharacter(): void {
-    if (!this.queries.isAdmin()) {
-      return;
-    }
-
-    const tokenIndex = this.state.getNextTokenIndex();
-    this.state.setNextTokenIndex(tokenIndex + 1);
-    const character = createSceneCharacter(tokenIndex, true);
-
-    this.state.sceneCharacters.push(character);
-    this.actions.renderCharacterPanel();
-    this.actions.openTokenInspector(character.id);
-    this.network.sendCharacterAdded(character);
-  }
-
   placeCharacterAtCell(characterId: string, cell: Cell): void {
     if (
       !this.queries.isAdmin() ||

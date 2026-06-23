@@ -42,7 +42,6 @@ export function installControlEventHandlers(options: {
     characterToggleButton: HTMLButtonElement;
     characterCloseButton: HTMLButtonElement;
     addCharacterButton: HTMLButtonElement;
-    addNpcButton: HTMLButtonElement;
     closeTokenInspectorButton: HTMLButtonElement;
     tokenInspectorOverlay: HTMLElement;
     deleteTokenInstanceButton: HTMLButtonElement;
@@ -91,7 +90,6 @@ export function installControlEventHandlers(options: {
     setChatPanelOpen: (open: boolean) => void;
     setCharacterPanelOpen: (open: boolean) => void;
     addCharacter: () => void;
-    addNpcCharacter: () => void;
     updateCharacterIsNpc: (isNpc: boolean) => void;
     closeTokenInspector: () => void;
     deleteToken: (tokenId: string) => void;
@@ -238,7 +236,6 @@ export function installControlEventHandlers(options: {
     actions.setCharacterPanelOpen(false);
   });
   elements.addCharacterButton.addEventListener("click", actions.addCharacter);
-  elements.addNpcButton.addEventListener("click", actions.addNpcCharacter);
   elements.closeTokenInspectorButton.addEventListener("click", actions.closeTokenInspector);
   elements.tokenInspectorOverlay.addEventListener("click", (event) => {
     if (event.target === elements.tokenInspectorOverlay) {

@@ -101,9 +101,6 @@ const {
   characterCloseButton,
   addCharacterButton,
   characterList,
-  npcCharacterSection,
-  addNpcButton,
-  npcCharacterList,
   selectionPanel,
   selectionEyebrow,
   selectionTitle,
@@ -221,9 +218,6 @@ const characterPanelController = new CharacterPanelController(
     toggleButton: characterToggleButton,
     addButton: addCharacterButton,
     list: characterList,
-    npcSection: npcCharacterSection,
-    addNpcButton,
-    npcList: npcCharacterList,
   },
   {
     canShowCharacters: isAdmin,
@@ -1020,10 +1014,6 @@ function addCharacter(): void {
   characterTokenController.addCharacter();
 }
 
-function addNpcCharacter(): void {
-  characterTokenController.addNpcCharacter();
-}
-
 function updateCharacterIsNpc(isNpc: boolean): void {
   characterTokenController.updateCharacterIsNpc(isNpc);
 }
@@ -1245,7 +1235,6 @@ installControlEventHandlers({
     characterToggleButton,
     characterCloseButton,
     addCharacterButton,
-    addNpcButton,
     closeTokenInspectorButton,
     tokenInspectorOverlay,
     deleteTokenInstanceButton,
@@ -1295,7 +1284,6 @@ installControlEventHandlers({
     setChatPanelOpen,
     setCharacterPanelOpen,
     addCharacter,
-    addNpcCharacter,
     updateCharacterIsNpc,
     closeTokenInspector,
     deleteToken,
