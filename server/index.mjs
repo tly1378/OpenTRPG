@@ -856,14 +856,29 @@ function handleChatDice(client, message) {
     diceMessage.rollVisibility = null;
   }
 
+  const authorId = String(client.identity.id ?? client.clientId);
+  let tokenName = null;
+
+  if (diceMessage.tokenId) {
+    const token = sceneTokens.find((candidate) => candidate.id === diceMessage.tokenId);
+    if (!token || !canControlToken(client, token)) {
+      return;
+    }
+
+    if (authorId !== diceMessage.tokenId) {
+      tokenName = token.name.slice(0, 24);
+    }
+  }
+
   const now = Date.now();
   const chatMessage = {
     id: randomUUID(),
-    authorId: String(client.identity.id ?? client.clientId),
+    authorId,
     authorName: String(client.identity.name ?? "未知用户").slice(0, 24),
     authorType: client.identity.type === "admin" ? "admin" : "player",
     createdAt: now,
     ...diceMessage,
+    ...(tokenName ? { tokenName } : {}),
   };
 
   client.lastSeenAt = now;

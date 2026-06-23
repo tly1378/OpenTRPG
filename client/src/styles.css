@@ -392,8 +392,8 @@ button {
 .dice-panel-heading {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 8px;
+  padding-right: 44px;
 }
 
 .dice-panel-title-row {
@@ -428,27 +428,27 @@ button {
 }
 
 .dice-focus-label.is-toggle {
-  border: 1px solid rgb(255 255 255 / 16%);
-  border-radius: 999px;
-  background: rgb(255 255 255 / 6%);
+  border: 0;
+  background: transparent;
   color: #b7c4d4;
   cursor: pointer;
-  padding: 2px 8px;
+  padding: 0;
 }
 
 .dice-focus-label.is-toggle.is-public {
-  border-color: rgb(104 191 255 / 45%);
   color: #7dd3fc;
 }
 
 .dice-focus-label.is-toggle:hover,
 .dice-focus-label.is-toggle:focus-visible {
-  border-color: rgb(104 191 255 / 70%);
   color: #edf4fb;
   outline: none;
 }
 
 .dice-clear-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 999px;
   background: rgb(255 255 255 / 7%);

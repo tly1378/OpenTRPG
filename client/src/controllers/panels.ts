@@ -17,6 +17,20 @@ function formatCell(cell: Cell): string {
   return `(${cell.x}, ${cell.y})`;
 }
 
+function isProxyDiceRoll(message: Extract<ChatMessage, { kind: "dice" }>): boolean {
+  const tokenId = message.tokenId ?? (message.authorType === "player" ? message.authorId : null);
+  return tokenId !== null && message.authorId !== tokenId;
+}
+
+function formatChatAuthor(message: ChatMessage): string {
+  if (message.kind === "dice" && isProxyDiceRoll(message)) {
+    const tokenName = message.tokenName ?? "未知角色";
+    return `${tokenName}（${message.authorName} · 代投）`;
+  }
+
+  return message.authorName;
+}
+
 export class LatencyPanelController {
   private snapshot: NetworkSnapshot = {
     status: "offline",
@@ -153,7 +167,7 @@ export class ChatPanelController {
       item.className = "chat-message";
       meta.className = "chat-message-meta";
       author.className = "chat-message-author";
-      author.textContent = message.authorName;
+      author.textContent = formatChatAuthor(message);
       time.textContent = formatChatTime(message.createdAt);
       meta.append(author, time);
 

@@ -103,6 +103,7 @@ export type DiceChatMessage = ChatMessageBase & {
   total: number;
   detail: string;
   tokenId?: string | null;
+  tokenName?: string | null;
   rollVisibility?: DiceRollVisibility | null;
 };
 
