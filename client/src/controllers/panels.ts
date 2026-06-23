@@ -25,7 +25,15 @@ function isProxyDiceRoll(message: Extract<ChatMessage, { kind: "dice" }>): boole
 function formatChatAuthor(message: ChatMessage): string {
   if (message.kind === "dice" && isProxyDiceRoll(message)) {
     const tokenName = message.tokenName ?? "未知角色";
-    return `${tokenName}（${message.authorName} · 代投）`;
+    return `${tokenName}（代投）`;
+  }
+
+  if (message.kind === "dice" && message.rollVisibility === "public") {
+    return `${message.authorName}（明投）`;
+  }
+
+  if (message.kind === "dice" && message.rollVisibility === "hidden") {
+    return `${message.authorName}（暗投）`;
   }
 
   return message.authorName;
