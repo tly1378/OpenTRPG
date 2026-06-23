@@ -5,6 +5,78 @@ import type { RenderState } from "../modules/canvas/renderer";
 
 const DISPLAY_DURATION_MS = 6000;
 const FADE_DURATION_MS = 800;
+const DICE_STEP_PATTERN = /^(\d+)d(\d+):\s*(.+)$/;
+
+function appendHighlightedRollValue(container: HTMLElement, rollValue: string, sides: number): void {
+  const roll = Number(rollValue);
+  if (!Number.isFinite(roll)) {
+    container.append(rollValue);
+    return;
+  }
+
+  if (sides === 20 && roll === 1) {
+    const highlight = document.createElement("span");
+    highlight.className = "dice-roll-natural-1";
+    highlight.textContent = String(roll);
+    container.append(highlight);
+    return;
+  }
+
+  if (sides === 20 && roll === 20) {
+    const highlight = document.createElement("span");
+    highlight.className = "dice-roll-natural-20";
+    highlight.textContent = String(roll);
+    container.append(highlight);
+    return;
+  }
+
+  container.append(String(roll));
+}
+
+function appendDiceStepContent(container: HTMLElement, step: string): void {
+  const match = step.match(DICE_STEP_PATTERN);
+  if (!match) {
+    container.textContent = step;
+    return;
+  }
+
+  const count = Number(match[1]);
+  const sides = Number(match[2]);
+  const rolls = match[3]
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (count === 1 && sides === 20 && rolls.length === 1 && Number(rolls[0]) === 20) {
+    container.classList.add("dice-roll-natural-20");
+    container.textContent = step;
+    return;
+  }
+
+  if (sides === 20 && rolls.length > 0) {
+    container.append(`${count}d${sides}: `);
+    rolls.forEach((rollValue, index) => {
+      if (index > 0) {
+        container.append(", ");
+      }
+      appendHighlightedRollValue(container, rollValue, sides);
+    });
+    return;
+  }
+
+  container.textContent = step;
+}
+
+function createDiceStepElement(step: string, className: string): HTMLElement {
+  const stepElement = document.createElement("div");
+  stepElement.className = className;
+  appendDiceStepContent(stepElement, step);
+  return stepElement;
+}
+
+function splitDiceDetail(detail: string): string[] {
+  return detail.split(" · ").filter(Boolean);
+}
 
 type TokenDiceOverlay = {
   tokenId: string;
@@ -141,7 +213,25 @@ export class DiceRollDisplayController {
 
     const element = document.createElement("div");
     element.className = "dice-hidden-log-entry";
-    element.textContent = `${message.formula} = ${message.total} · ${message.detail}`;
+    element.classList.add(message.rollVisibility === "public" ? "is-public" : "is-hidden");
+
+    const total = document.createElement("div");
+    total.className = "dice-hidden-log-total";
+    total.textContent = String(message.total);
+
+    const process = document.createElement("div");
+    process.className = "dice-hidden-log-process";
+
+    const formula = document.createElement("div");
+    formula.className = "dice-hidden-log-formula";
+    formula.textContent = message.formula;
+    process.append(formula);
+
+    for (const step of splitDiceDetail(message.detail)) {
+      process.append(createDiceStepElement(step, "dice-hidden-log-step"));
+    }
+
+    element.append(total, process);
 
     this.hiddenLogContainer.replaceChildren(element);
     this.hiddenLog = {
@@ -162,7 +252,11 @@ export class DiceRollDisplayController {
     detail.className = "dice-token-overlay-detail";
     formula.textContent = message.formula;
     total.textContent = String(message.total);
-    detail.textContent = message.detail;
+
+    for (const step of splitDiceDetail(message.detail)) {
+      detail.append(createDiceStepElement(step, "dice-token-overlay-detail-step"));
+    }
+
     element.append(formula, total, detail);
     return element;
   }
