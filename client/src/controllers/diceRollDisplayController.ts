@@ -91,7 +91,7 @@ type HiddenDiceLog = {
 
 export class DiceRollDisplayController {
   private readonly tokenOverlays = new Map<string, TokenDiceOverlay>();
-  private hiddenLog: HiddenDiceLog | null = null;
+  private readonly hiddenLogs: HiddenDiceLog[] = [];
   private seenMessageIds = new Set<string>();
 
   constructor(
@@ -155,13 +155,16 @@ export class DiceRollDisplayController {
       this.applyFade(overlay.element, overlay.createdAt, now);
     }
 
-    if (this.hiddenLog) {
+    if (this.hiddenLogs.length > 0) {
       const latencyRect = this.latencyPanel.getBoundingClientRect();
       this.hiddenLogContainer.style.left = `${latencyRect.left}px`;
       this.hiddenLogContainer.style.width = `${latencyRect.width}px`;
       this.hiddenLogContainer.style.bottom = `${window.innerHeight - latencyRect.top + 8}px`;
       this.hiddenLogContainer.hidden = false;
-      this.applyFade(this.hiddenLog.element, this.hiddenLog.createdAt, now);
+
+      for (const log of this.hiddenLogs) {
+        this.applyFade(log.element, log.createdAt, now);
+      }
     } else {
       this.hiddenLogContainer.hidden = true;
     }
@@ -209,8 +212,15 @@ export class DiceRollDisplayController {
   }
 
   private showBroadcastLog(message: DiceChatMessage): void {
-    this.hiddenLog?.element.remove();
+    const element = this.createBroadcastLogEntry(message);
+    this.hiddenLogContainer.append(element);
+    this.hiddenLogs.push({
+      element,
+      createdAt: performance.now(),
+    });
+  }
 
+  private createBroadcastLogEntry(message: DiceChatMessage): HTMLElement {
     const element = document.createElement("div");
     element.className = "dice-hidden-log-entry";
     element.classList.add(message.rollVisibility === "public" ? "is-public" : "is-hidden");
@@ -232,12 +242,7 @@ export class DiceRollDisplayController {
     }
 
     element.append(total, process);
-
-    this.hiddenLogContainer.replaceChildren(element);
-    this.hiddenLog = {
-      element,
-      createdAt: performance.now(),
-    };
+    return element;
   }
 
   private createTokenOverlayElement(message: DiceChatMessage): HTMLElement {
@@ -269,10 +274,12 @@ export class DiceRollDisplayController {
       }
     }
 
-    if (this.hiddenLog && now - this.hiddenLog.createdAt >= DISPLAY_DURATION_MS + FADE_DURATION_MS) {
-      this.hiddenLog.element.remove();
-      this.hiddenLog = null;
-      this.hiddenLogContainer.replaceChildren();
+    for (let index = this.hiddenLogs.length - 1; index >= 0; index -= 1) {
+      const log = this.hiddenLogs[index];
+      if (now - log.createdAt >= DISPLAY_DURATION_MS + FADE_DURATION_MS) {
+        log.element.remove();
+        this.hiddenLogs.splice(index, 1);
+      }
     }
   }
 
@@ -292,8 +299,10 @@ export class DiceRollDisplayController {
       overlay.element.remove();
     }
     this.tokenOverlays.clear();
-    this.hiddenLog?.element.remove();
-    this.hiddenLog = null;
+    for (const log of this.hiddenLogs) {
+      log.element.remove();
+    }
+    this.hiddenLogs.length = 0;
     this.hiddenLogContainer.replaceChildren();
     this.hiddenLogContainer.hidden = true;
   }

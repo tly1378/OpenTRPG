@@ -587,7 +587,8 @@ button {
 .dice-hidden-log {
   position: fixed;
   z-index: 15;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
   pointer-events: none;
 }
