@@ -1,5 +1,5 @@
 import { TOKEN_COLORS } from "../../core/constants";
-import type { Cell, SceneCharacter, SceneImage, SceneToken } from "../../core/types";
+import type { Cell, SceneCharacter, SceneImage, SceneItemDefinition, SceneItemInstance, SceneToken } from "../../core/types";
 
 export function normalizeImageZIndexes(images: SceneImage[]): number {
   images
@@ -52,6 +52,23 @@ export function createSceneToken(character: SceneCharacter, cell: Cell): SceneTo
   return {
     ...character,
     cell,
+  };
+}
+
+export function createSceneItemDefinition(itemIndex: number): SceneItemDefinition {
+  return {
+    id: crypto.randomUUID(),
+    name: `物品${itemIndex}`,
+    description: "",
+  };
+}
+
+export function createSceneItemInstance(definitionId: string, cell: Cell): SceneItemInstance {
+  return {
+    id: crypto.randomUUID(),
+    definitionId,
+    cell,
+    quantity: 1,
   };
 }
 

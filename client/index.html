@@ -60,6 +60,9 @@
           <button id="character-toggle-button" type="button" class="tool-button subtle-button is-hidden" aria-label="打开角色管理" aria-pressed="false" data-tooltip="角色">
             <span data-lucide="users" aria-hidden="true"></span>
           </button>
+          <button id="item-toggle-button" type="button" class="tool-button subtle-button is-hidden" aria-label="打开物品图鉴" aria-pressed="false" data-tooltip="物品图鉴">
+            <span data-lucide="package" aria-hidden="true"></span>
+          </button>
         </div>
         <span id="identity-badge" class="identity-badge">未登录</span>
       </header>
@@ -153,6 +156,23 @@
         <p class="panel-help">管理员可将角色拖入地图生成棋子；NPC 无法登录，仅主持人可操控。</p>
       </aside>
 
+      <aside id="item-panel" class="character-panel item-panel" aria-label="物品图鉴栏" aria-hidden="true" hidden>
+        <div class="character-panel-header">
+          <div>
+            <p class="panel-eyebrow">物品</p>
+            <h2>物品图鉴</h2>
+          </div>
+          <button id="item-close-button" class="chat-close-button" type="button" aria-label="关闭物品图鉴">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+          </button>
+        </div>
+        <button id="add-item-button" type="button" class="primary-panel-action">创建物品</button>
+        <div id="item-list" class="character-list" aria-live="polite">
+          <div class="character-empty">还没有物品。</div>
+        </div>
+        <p class="panel-help">图鉴中的物品只是模板；拖入地图后才会生成场景中的物品实体。</p>
+      </aside>
+
       <aside id="selection-panel" class="selection-panel" aria-hidden="true">
         <div class="panel-eyebrow" id="selection-eyebrow">图片检视</div>
         <div class="selection-title" id="selection-title">图片</div>
@@ -228,11 +248,11 @@
         </div>
       </section>
 
-      <section id="avatar-editor-overlay" class="avatar-editor-overlay" hidden aria-label="头像裁剪编辑器">
+      <section id="avatar-editor-overlay" class="avatar-editor-overlay" hidden aria-label="图标裁剪编辑器">
         <div class="avatar-editor-card">
-          <p class="panel-eyebrow">头像裁剪</p>
-          <h2>调整角色头像</h2>
-          <p class="avatar-editor-help">拖动图片调整位置，滚轮缩放。圆圈外区域不会出现在棋子头像中。</p>
+          <p class="panel-eyebrow">图标裁剪</p>
+          <h2 id="avatar-editor-title">调整图标</h2>
+          <p class="avatar-editor-help">拖动图片调整位置，滚轮缩放。圆圈外区域不会出现在显示图标中。</p>
           <div id="avatar-editor-stage" class="avatar-editor-stage">
             <img id="avatar-editor-image" alt="待裁剪头像" draggable="false" />
             <div class="avatar-editor-mask" aria-hidden="true"></div>
@@ -241,6 +261,80 @@
             <button id="cancel-avatar-edit" type="button">取消</button>
             <button id="save-avatar-edit" type="button">保存头像</button>
           </div>
+        </div>
+      </section>
+
+      <section id="item-definition-inspector-overlay" class="token-inspector-overlay" hidden aria-label="物品图鉴检视面板">
+        <div class="token-inspector-card">
+          <div class="token-inspector-header">
+            <div>
+              <p class="panel-eyebrow">物品图鉴检视</p>
+            </div>
+            <button id="close-item-definition-inspector" class="chat-close-button" type="button" aria-label="关闭物品图鉴检视">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+            </button>
+          </div>
+          <form id="item-definition-selection-form" class="token-selection-form">
+            <div id="item-name-display" class="token-name-display">
+              <span id="item-name-value" class="token-name-value">物品</span>
+              <input id="item-name-input" class="token-name-inline-input" type="text" maxlength="24" autocomplete="off" hidden />
+              <button id="edit-item-name" class="icon-panel-action" type="button" aria-label="编辑物品名称">✎</button>
+            </div>
+            <label class="panel-field">
+              <span>描述</span>
+              <textarea id="item-description-input" class="item-description-input" maxlength="500" rows="4" placeholder="输入物品描述"></textarea>
+            </label>
+            <div class="panel-section">
+              <div class="panel-section-title">物品图标</div>
+              <label id="item-icon-upload-button" class="primary-panel-action avatar-upload-button">
+                上传图标
+                <input id="item-icon-upload-input" type="file" accept="image/*" />
+              </label>
+              <div id="item-icon-adjust-controls" class="avatar-adjust-controls" hidden>
+                <button id="edit-item-icon" type="button">编辑图标裁剪</button>
+                <button id="reset-item-icon-adjustment" type="button">重置图标位置</button>
+              </div>
+            </div>
+            <div class="item-definition-actions">
+              <button id="delete-item-definition" type="button" class="destructive-panel-action">删除物品</button>
+            </div>
+            <p id="item-definition-panel-help" class="panel-help">修改后会同步到所有客户端。</p>
+          </form>
+        </div>
+      </section>
+
+      <section id="item-instance-inspector-overlay" class="token-inspector-overlay" hidden aria-label="场景物品检视面板">
+        <div class="token-inspector-card">
+          <div class="token-inspector-header">
+            <div>
+              <p class="panel-eyebrow">场景物品检视</p>
+            </div>
+            <button id="close-item-instance-inspector" class="chat-close-button" type="button" aria-label="关闭场景物品检视">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+            </button>
+          </div>
+          <form id="item-instance-selection-form" class="token-selection-form">
+            <div class="panel-section">
+              <div class="panel-section-title">物品图标</div>
+              <div id="item-instance-icon-preview" class="character-avatar item-icon item-instance-icon-preview"></div>
+            </div>
+            <div class="panel-field">
+              <span>名称</span>
+              <div id="item-instance-name-value" class="item-readonly-value">物品</div>
+            </div>
+            <div class="panel-field">
+              <span>描述</span>
+              <p id="item-instance-description-value" class="item-readonly-description">暂无描述</p>
+            </div>
+            <label class="panel-field">
+              <span>数量</span>
+              <input id="item-quantity-input" class="item-quantity-input" type="number" min="1" max="9999" step="1" value="1" />
+            </label>
+            <div class="item-instance-actions">
+              <button id="delete-item-instance" type="button" class="destructive-panel-action">删除场景物品</button>
+            </div>
+            <p id="item-instance-panel-help" class="panel-help">场景中的物品实体只能修改数量或删除。</p>
+          </form>
         </div>
       </section>
     </div>

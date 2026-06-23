@@ -1,7 +1,7 @@
 import { TOKEN_STEP_ANIMATION_MS } from "../../core/constants";
 import { cellCenter, findPath as findGridPath, nearestEditableEdge, sameCell, worldToCell } from "../grid/grid";
 import { hasDraggedImage } from "../image/imageImport";
-import type { Cell, Interaction, SceneDoor, SceneImage, SceneImageSnapshot, SceneToken, Vector2, WallEdge } from "../../core/types";
+import type { Cell, Interaction, SceneDoor, SceneImage, SceneImageSnapshot, SceneItemInstance, SceneToken, Vector2, WallEdge } from "../../core/types";
 
 type MovementBlockedEdges = {
   vertical: Set<string>;
@@ -50,6 +50,7 @@ export function installCanvasInteractions(bindings: {
     isPlayMode: () => boolean;
     canInspectDoor: () => boolean;
     canInspectToken: () => boolean;
+    canInspectItem: () => boolean;
     canControlToken: (token: SceneToken) => boolean;
     isTokenAnimating: (tokenId: string) => boolean;
     getSelectedImage: () => SceneImage | null;
@@ -58,6 +59,7 @@ export function installCanvasInteractions(bindings: {
     hitTestRoom: (worldPoint: Vector2) => { id: string } | null;
     hitTestWallIntersection: (worldPoint: Vector2) => { x: number; y: number } | null;
     hitTestToken: (worldPoint: Vector2) => SceneToken | null;
+    hitTestItemInstance: (worldPoint: Vector2) => SceneItemInstance | null;
     hitTestDoor: (worldPoint: Vector2) => SceneDoor | null;
     hitTestImage: (worldPoint: Vector2) => SceneImage | null;
     movementBlockedEdgeSets: () => MovementBlockedEdges;
@@ -65,14 +67,17 @@ export function installCanvasInteractions(bindings: {
   };
   actions: {
     closeTokenInspector: () => void;
+    closeItemDefinitionInspector: () => void;
     updateSelectionPanel: () => void;
     setCursor: (screenPoint: Vector2) => void;
     placeCharacterAtCell: (characterId: string, cell: Cell) => void;
+    placeItemAtCell: (definitionId: string, cell: Cell) => void;
     selectRoom: (roomId: string | null) => void;
     closedRegionAt: (worldPoint: Vector2) => Cell[];
     selectRoomFromCells: (cells: Cell[]) => void;
     toggleDoorAtEdge: (edge: { type: "vertical" | "horizontal"; x: number; y: number }) => void;
     selectToken: (tokenId: string | null, inspect?: boolean) => void;
+    selectItemInstance: (instanceId: string | null, inspect?: boolean) => void;
     selectDoor: (door: SceneDoor | null) => void;
     selectImage: (imageId: string | null) => void;
     updateRoomPreview: (worldPoint: Vector2) => void;
@@ -97,23 +102,43 @@ export function installCanvasInteractions(bindings: {
     return event.dataTransfer?.getData("application/x-trpg-character-id") || null;
   }
 
+  function draggedItemDefinitionId(event: DragEvent): string | null {
+    return event.dataTransfer?.getData("application/x-trpg-item-definition-id") || null;
+  }
+
   canvas.addEventListener("dragover", (event) => {
-    if (!queries.isAdmin() || !event.dataTransfer?.types.includes("application/x-trpg-character-id")) {
+    if (!queries.isAdmin()) {
+      return;
+    }
+
+    const hasCharacter = event.dataTransfer?.types.includes("application/x-trpg-character-id");
+    const hasItem = event.dataTransfer?.types.includes("application/x-trpg-item-definition-id");
+    if (!hasCharacter && !hasItem) {
       return;
     }
 
     event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
+    event.dataTransfer!.dropEffect = "copy";
   });
 
   canvas.addEventListener("drop", (event) => {
-    const characterId = draggedCharacterId(event);
-    if (!queries.isAdmin() || !characterId) {
+    if (!queries.isAdmin()) {
       return;
     }
 
     event.preventDefault();
-    actions.placeCharacterAtCell(characterId, worldToCell(viewport.screenToWorld(viewport.screenPointFromEvent(event))));
+    const cell = worldToCell(viewport.screenToWorld(viewport.screenPointFromEvent(event)));
+    const characterId = draggedCharacterId(event);
+    const itemDefinitionId = draggedItemDefinitionId(event);
+
+    if (characterId) {
+      actions.placeCharacterAtCell(characterId, cell);
+      return;
+    }
+
+    if (itemDefinitionId) {
+      actions.placeItemAtCell(itemDefinitionId, cell);
+    }
   });
 
   canvas.addEventListener("pointerdown", (event) => {
@@ -126,6 +151,7 @@ export function installCanvasInteractions(bindings: {
       event.preventDefault();
       state.setSelectedImageId(null);
       state.setSelectedTokenId(null);
+      actions.selectItemInstance(null);
       actions.closeTokenInspector();
       state.setSelectedDoorId(null);
       actions.updateSelectionPanel();
@@ -151,6 +177,7 @@ export function installCanvasInteractions(bindings: {
     if (queries.isEditingBlocking()) {
       state.setSelectedImageId(null);
       state.setSelectedTokenId(null);
+      actions.selectItemInstance(null);
 
       if (state.getLogicTool() === "room" || state.getLogicTool() === "inspect-room") {
         if (state.getLogicTool() === "inspect-room") {
@@ -262,6 +289,7 @@ export function installCanvasInteractions(bindings: {
       } else {
         state.setSelectedImageId(null);
         state.setSelectedTokenId(null);
+        actions.selectItemInstance(null);
         state.setSelectedDoorId(null);
         state.setSelectedRoomId(null);
         actions.updateSelectionPanel();
@@ -410,11 +438,19 @@ export function installCanvasInteractions(bindings: {
   });
 
   canvas.addEventListener("dblclick", (event) => {
+    const worldPoint = viewport.screenToWorld(viewport.screenPointFromEvent(event));
+    const itemHit = queries.canInspectItem() ? queries.hitTestItemInstance(worldPoint) : null;
+    if (itemHit) {
+      event.preventDefault();
+      actions.selectItemInstance(itemHit.id, true);
+      return;
+    }
+
     if (!queries.canInspectToken()) {
       return;
     }
 
-    const tokenHit = queries.hitTestToken(viewport.screenToWorld(viewport.screenPointFromEvent(event)));
+    const tokenHit = queries.hitTestToken(worldPoint);
     if (!tokenHit) {
       return;
     }

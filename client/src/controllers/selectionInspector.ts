@@ -1,4 +1,5 @@
-import type { SceneCharacter, SceneDoor, SceneImage, SceneRoom, SceneToken } from "../core/types";
+import type { SceneCharacter, SceneDoor, SceneImage, SceneItemDefinition, SceneItemInstance, SceneRoom, SceneToken } from "../core/types";
+import { buildItemDisplayLabel, buildItemStackDescription, getItemStackForInstance, type ItemStack } from "../modules/items/itemStacks";
 
 export function renderSelectionPanel(options: {
   elements: {
@@ -131,5 +132,129 @@ export function renderTokenInspector(options: {
 
   if (document.activeElement !== elements.tokenNameInput || !options.isEditingTokenName) {
     elements.tokenNameInput.value = character.name;
+  }
+}
+
+export function renderItemDefinitionInspector(options: {
+  elements: {
+    itemDefinitionInspectorOverlay: HTMLElement;
+    itemNameDisplay: HTMLDivElement;
+    itemNameValue: HTMLSpanElement;
+    editItemNameButton: HTMLButtonElement;
+    itemNameInput: HTMLInputElement;
+    itemDescriptionInput: HTMLTextAreaElement;
+    itemIconUploadInput: HTMLInputElement;
+    itemIconUploadButton: HTMLLabelElement;
+    itemIconAdjustControls: HTMLDivElement;
+    editItemIconButton: HTMLButtonElement;
+    resetItemIconAdjustmentButton: HTMLButtonElement;
+    deleteItemDefinitionButton: HTMLButtonElement;
+    itemDefinitionPanelHelp: HTMLParagraphElement;
+  };
+  definition: SceneItemDefinition | null;
+  isAdmin: boolean;
+  isEditingItemName: boolean;
+  isEditingItemDescription: boolean;
+  clearItemNameEditing: () => void;
+  clearItemDescriptionEditing: () => void;
+}): void {
+  const { elements, definition } = options;
+
+  if (!definition || !options.isAdmin) {
+    elements.itemDefinitionInspectorOverlay.hidden = true;
+    options.clearItemNameEditing();
+    options.clearItemDescriptionEditing();
+    return;
+  }
+
+  elements.itemDefinitionInspectorOverlay.hidden = false;
+  elements.itemNameValue.textContent = definition.name;
+  elements.itemNameValue.hidden = options.isEditingItemName;
+  elements.editItemNameButton.disabled = !options.isAdmin;
+  elements.itemNameInput.hidden = !options.isEditingItemName;
+  elements.itemNameInput.disabled = !options.isAdmin;
+  elements.itemIconUploadInput.disabled = !options.isAdmin;
+  elements.itemIconUploadButton.classList.toggle("is-disabled", !options.isAdmin);
+  elements.itemIconAdjustControls.hidden = !definition.iconSrc;
+  elements.editItemIconButton.disabled = !options.isAdmin;
+  elements.resetItemIconAdjustmentButton.disabled = !options.isAdmin;
+  elements.deleteItemDefinitionButton.disabled = !options.isAdmin;
+  elements.itemDefinitionPanelHelp.textContent = "修改后会同步到所有客户端。";
+
+  if (document.activeElement !== elements.itemNameInput || !options.isEditingItemName) {
+    elements.itemNameInput.value = definition.name;
+  }
+
+  if (document.activeElement !== elements.itemDescriptionInput || !options.isEditingItemDescription) {
+    elements.itemDescriptionInput.value = definition.description ?? "";
+  }
+}
+
+export function renderItemInstanceInspector(options: {
+  elements: {
+    itemInstanceInspectorOverlay: HTMLElement;
+    itemInstanceNameValue: HTMLSpanElement;
+    itemInstanceDescriptionValue: HTMLParagraphElement;
+    itemInstanceIconPreview: HTMLDivElement;
+    itemQuantityInput: HTMLInputElement;
+    deleteItemInstanceButton: HTMLButtonElement;
+    itemInstancePanelHelp: HTMLParagraphElement;
+  };
+  definition: SceneItemDefinition | null;
+  instance: SceneItemInstance | null;
+  stack: ItemStack | null;
+  definitionsById: Map<string, SceneItemDefinition>;
+  iconImages: Map<string, { src: string; image: HTMLImageElement }>;
+  isAdmin: boolean;
+  canInspect: boolean;
+}): void {
+  const { elements, definition, instance, stack } = options;
+
+  if (!definition || !instance || !stack || !options.canInspect) {
+    elements.itemInstanceInspectorOverlay.hidden = true;
+    return;
+  }
+
+  const isMultiItemStack = stack.instances.length > 1;
+  const displayLabel = buildItemDisplayLabel(stack, options.definitionsById);
+
+  elements.itemInstanceInspectorOverlay.hidden = false;
+  elements.itemInstanceNameValue.textContent = displayLabel;
+  elements.itemInstanceDescriptionValue.textContent = buildItemStackDescription(stack, options.definitionsById);
+  elements.itemQuantityInput.value = String(instance.quantity);
+  elements.itemQuantityInput.disabled = !options.isAdmin || isMultiItemStack;
+  elements.deleteItemInstanceButton.disabled = !options.isAdmin;
+  elements.itemInstancePanelHelp.textContent = isMultiItemStack
+    ? options.isAdmin
+      ? "该格子里有多个物品叠放。双击后可删除当前选中的单个物品。"
+      : "该格子里有多个物品叠放。"
+    : options.isAdmin
+      ? "场景中的物品实体只能修改数量或删除。"
+      : "你只能查看场景物品的信息。";
+
+  const iconImage = options.iconImages.get(definition.id);
+  elements.itemInstanceIconPreview.replaceChildren();
+  elements.itemInstanceIconPreview.style.removeProperty("--character-color");
+
+  if (iconImage) {
+    const image = document.createElement("img");
+    const diameter = 100;
+    const radius = diameter / 2;
+    const scale = definition.iconScale ?? 1;
+    const offsetX = (definition.iconOffsetX ?? 0) * radius;
+    const offsetY = (definition.iconOffsetY ?? 0) * radius;
+    const ratio = iconImage.image.naturalWidth / iconImage.image.naturalHeight || 1;
+    const width = ratio >= 1 ? diameter * scale * ratio : diameter * scale;
+    const height = ratio >= 1 ? diameter * scale : (diameter * scale) / ratio;
+
+    image.src = iconImage.src;
+    image.alt = `${definition.name} 图标`;
+    image.style.width = `${width}%`;
+    image.style.height = `${height}%`;
+    image.style.left = `${50 + offsetX}%`;
+    image.style.top = `${50 + offsetY}%`;
+    elements.itemInstanceIconPreview.append(image);
+  } else {
+    elements.itemInstanceIconPreview.textContent = definition.name.trim().slice(0, 1) || "物";
   }
 }

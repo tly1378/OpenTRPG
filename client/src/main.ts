@@ -3,6 +3,7 @@ import { GRID_CELL_SIZE } from "./core/constants";
 import { AvatarEditorController } from "./controllers/avatarEditorController";
 import { BackgroundImageController } from "./controllers/backgroundImageController";
 import { CharacterTokenController } from "./controllers/characterTokenController";
+import { ItemController } from "./controllers/itemController";
 import { installCanvasInteractions } from "./modules/canvas/canvasInteractions";
 import { createAppContext } from "./core/appContext";
 import { createAppState } from "./core/appState";
@@ -11,7 +12,7 @@ import { DiceRollDisplayController } from "./controllers/diceRollDisplayControll
 import { queryDomRefs } from "./controllers/domRefs";
 import { installControlEventHandlers } from "./controllers/eventHandlers";
 import { LogicMapController } from "./controllers/logicMapController";
-import { renderSelectionPanel as renderSelectionInspectorPanel, renderTokenInspector as renderTokenInspectorPanel } from "./controllers/selectionInspector";
+import { renderSelectionPanel as renderSelectionInspectorPanel, renderItemDefinitionInspector as renderItemDefinitionInspectorPanel, renderItemInstanceInspector as renderItemInstanceInspectorPanel, renderTokenInspector as renderTokenInspectorPanel } from "./controllers/selectionInspector";
 import { add, rotate } from "./utilities/geometry";
 import {
   movementBlockedEdgeSets as buildMovementBlockedEdgeSets,
@@ -19,6 +20,7 @@ import {
   sameCell,
   worldToCell,
 } from "./modules/grid/grid";
+import { getItemStackForInstance } from "./modules/items/itemStacks";
 import {
   computeImageResize,
   getResizeCursor,
@@ -29,6 +31,7 @@ import {
   hitTestResizeHandle as findHitResizeHandle,
   hitTestRotateHandle as findHitRotateHandle,
   hitTestToken as findHitToken,
+  hitTestItemInstance as findHitItemInstance,
 } from "./modules/canvas/hitTesting";
 import {
   buildIdentities,
@@ -49,7 +52,7 @@ import {
 import { updateModeControls as applyModeControls } from "./modules/identity/modeControls";
 import { createNetworkSyncAdapter } from "./services/networkSync";
 import { createSceneSyncApplier, sceneImageSnapshot, sceneImageSnapshots } from "./services/sceneSnapshotSync";
-import { CharacterPanelController, ChatPanelController, LatencyPanelController } from "./controllers/panels";
+import { CharacterPanelController, ChatPanelController, ItemPanelController, LatencyPanelController } from "./controllers/panels";
 import { renderScene } from "./modules/canvas/renderer";
 import type {
   AppMode,
@@ -64,6 +67,8 @@ import type {
   SceneCharacter,
   SceneImage,
   SceneImageSnapshot,
+  SceneItemDefinition,
+  SceneItemInstance,
   SceneRoom,
   SceneToken,
   Vector2,
@@ -104,6 +109,36 @@ const {
   characterCloseButton,
   addCharacterButton,
   characterList,
+  itemToggleButton,
+  itemPanel,
+  itemCloseButton,
+  addItemButton,
+  itemList,
+  itemDefinitionInspectorOverlay,
+  closeItemDefinitionInspectorButton,
+  itemDefinitionSelectionForm,
+  itemNameDisplay,
+  itemNameValue,
+  editItemNameButton,
+  itemNameInput,
+  itemDescriptionInput,
+  itemIconUploadButton,
+  itemIconUploadInput,
+  itemIconAdjustControls,
+  editItemIconButton,
+  resetItemIconAdjustmentButton,
+  deleteItemDefinitionButton,
+  itemDefinitionPanelHelp,
+  itemInstanceInspectorOverlay,
+  closeItemInstanceInspectorButton,
+  itemInstanceSelectionForm,
+  itemInstanceIconPreview,
+  itemInstanceNameValue,
+  itemInstanceDescriptionValue,
+  itemQuantityInput,
+  deleteItemInstanceButton,
+  itemInstancePanelHelp,
+  avatarEditorTitle,
   selectionPanel,
   selectionEyebrow,
   selectionTitle,
@@ -160,7 +195,10 @@ const {
   sceneImages,
   sceneCharacters,
   sceneTokens,
+  sceneItemDefinitions,
+  sceneItemInstances,
   tokenAvatarImages,
+  itemIconImages,
   blockedVerticalEdges,
   blockedHorizontalEdges,
   sceneDoors,
@@ -174,6 +212,9 @@ let {
   selectedImageId,
   selectedTokenId,
   inspectedCharacterId,
+  inspectedItemDefinitionId,
+  inspectedItemInstanceId,
+  selectedItemInstanceId,
   selectedDoorId,
   selectedRoomId,
   currentIdentity,
@@ -184,6 +225,7 @@ let {
   isLogicMapVisible,
   nextZ,
   nextTokenIndex,
+  nextItemIndex,
   dragDepth,
   movingTokens,
   previewTokenPosition,
@@ -193,6 +235,8 @@ let {
   previewWallEdges,
   previewWallTargetBlocked,
   tokenNameEditing,
+  itemNameEditing,
+  itemDescriptionEditing,
 } = appState;
 let adminUnfocusedRollVisibility: "hidden" | "public" = "hidden";
 const latencyPanelController = new LatencyPanelController(latencyPanel, isLoggedIn);
@@ -256,22 +300,27 @@ const characterPanelController = new CharacterPanelController(
     openTokenInspector,
   },
 );
-const avatarEditorController = new AvatarEditorController(
+const itemPanelController = new ItemPanelController(
   {
-    overlay: avatarEditorOverlay,
-    stage: avatarEditorStage,
-    image: avatarEditorImage,
+    panel: itemPanel,
+    toggleButton: itemToggleButton,
+    addButton: addItemButton,
+    list: itemList,
   },
   {
-    inspectedCharacter: getInspectedCharacter,
-    canControlToken,
-    characters: () => sceneCharacters,
-    avatarImages: () => tokenAvatarImages,
+    canShowItems: isAdmin,
+    isAdmin,
+    definitions: () => sceneItemDefinitions,
+    instances: () => sceneItemInstances,
+    iconImages: () => itemIconImages,
   },
   {
-    updateTokenAvatar,
+    deleteItemDefinition,
+    openItemDefinitionInspector,
   },
 );
+
+let avatarEditorController: AvatarEditorController;
 
 let sceneSync: ReturnType<typeof createSceneSyncApplier>;
 
@@ -290,7 +339,10 @@ const appContext = createAppContext({
     sceneImages,
     sceneCharacters,
     sceneTokens,
+    sceneItemDefinitions,
+    sceneItemInstances,
     tokenAvatarImages,
+    itemIconImages,
     blockedVerticalEdges,
     blockedHorizontalEdges,
     sceneDoors,
@@ -315,6 +367,18 @@ const appContext = createAppContext({
     setInspectedCharacterId: (characterId: string | null) => {
       inspectedCharacterId = characterId;
     },
+    getInspectedItemDefinitionId: () => inspectedItemDefinitionId,
+    setInspectedItemDefinitionId: (definitionId: string | null) => {
+      inspectedItemDefinitionId = definitionId;
+    },
+    getInspectedItemInstanceId: () => inspectedItemInstanceId,
+    setInspectedItemInstanceId: (instanceId: string | null) => {
+      inspectedItemInstanceId = instanceId;
+    },
+    getSelectedItemInstanceId: () => selectedItemInstanceId,
+    setSelectedItemInstanceId: (instanceId: string | null) => {
+      selectedItemInstanceId = instanceId;
+    },
     getSelectedDoorId: () => selectedDoorId,
     setSelectedDoorId: (doorIdValue: string | null) => {
       selectedDoorId = doorIdValue;
@@ -334,6 +398,10 @@ const appContext = createAppContext({
     getNextTokenIndex: () => nextTokenIndex,
     setNextTokenIndex: (nextIndex: number) => {
       nextTokenIndex = nextIndex;
+    },
+    getNextItemIndex: () => nextItemIndex,
+    setNextItemIndex: (nextIndex: number) => {
+      nextItemIndex = nextIndex;
     },
     getInteraction: () => interaction,
     setInteraction: (nextInteraction: Interaction | null) => {
@@ -371,6 +439,18 @@ const appContext = createAppContext({
     clearTokenNameEditing: () => {
       tokenNameEditing = false;
     },
+    setItemNameEditing: (editing: boolean) => {
+      itemNameEditing = editing;
+    },
+    setItemDescriptionEditing: (editing: boolean) => {
+      itemDescriptionEditing = editing;
+    },
+    clearItemNameEditing: () => {
+      itemNameEditing = false;
+    },
+    clearItemDescriptionEditing: () => {
+      itemDescriptionEditing = false;
+    },
     clearPreviewState: () => {
       previewPath = [];
       previewTokenPosition = null;
@@ -380,8 +460,15 @@ const appContext = createAppContext({
   ui: {
     renderIdentityList,
     renderCharacterPanel,
+    renderItemPanel,
     openTokenInspector,
     updateTokenInspector,
+    openItemDefinitionInspector,
+    closeItemDefinitionInspector,
+    openItemInstanceInspector,
+    closeItemInstanceInspector,
+    updateItemDefinitionInspector,
+    updateItemInstanceInspector,
     updateSelectionPanel,
     showIdentityScreen,
     selectImage,
@@ -397,6 +484,12 @@ const appContext = createAppContext({
     sendCharacterDeleted: (characterId: string) => networkClient.sendCharacterDeleted(characterId),
     sendTokenAdded: (token: SceneToken) => networkClient.sendTokenAdded(token),
     sendTokenDeleted: (tokenId: string) => networkClient.sendTokenDeleted(tokenId),
+    sendItemDefinitionAdded: (definition: SceneItemDefinition) => networkClient.sendItemDefinitionAdded(definition),
+    sendItemDefinitionUpdated: (definition: SceneItemDefinition) => networkClient.sendItemDefinitionUpdated(definition),
+    sendItemDefinitionDeleted: (definitionId: string) => networkClient.sendItemDefinitionDeleted(definitionId),
+    sendItemInstanceAdded: (instance: SceneItemInstance) => networkClient.sendItemInstanceAdded(instance),
+    sendItemInstanceUpdated: (instance: SceneItemInstance) => networkClient.sendItemInstanceUpdated(instance),
+    sendItemInstanceDeleted: (instanceId: string) => networkClient.sendItemInstanceDeleted(instanceId),
     sendImageAdded: (image: SceneImageSnapshot) => networkClient.sendImageAdded(image),
     sendImageUpdated: (image: SceneImageSnapshot) => networkClient.sendImageUpdated(image),
     sendImagesUpdated: (images: SceneImageSnapshot[]) => networkClient.sendImagesUpdated(images),
@@ -418,7 +511,10 @@ sceneSync = createSceneSyncApplier({
   updateIdentityBadge: appContext.ui.updateIdentityBadge,
   renderIdentityList: appContext.ui.renderIdentityList,
   renderCharacterPanel: appContext.ui.renderCharacterPanel,
+  renderItemPanel: appContext.ui.renderItemPanel,
   updateTokenInspector: appContext.ui.updateTokenInspector,
+  updateItemDefinitionInspector: appContext.ui.updateItemDefinitionInspector,
+  updateItemInstanceInspector: appContext.ui.updateItemInstanceInspector,
   updateSelectionPanel: appContext.ui.updateSelectionPanel,
   showIdentityScreen: appContext.ui.showIdentityScreen,
 });
@@ -445,6 +541,128 @@ const characterTokenController = new CharacterTokenController(
     updateIdentityBadge: appContext.ui.updateIdentityBadge,
   },
   appContext.network,
+);
+const itemController = new ItemController(
+  {
+    ...appContext.collections,
+    ...appContext.state,
+  },
+  {
+    isAdmin,
+    getInspectedItemDefinition,
+    getInspectedItemInstance,
+  },
+  {
+    itemNameInput,
+    itemDescriptionInput,
+    itemQuantityInput,
+  },
+  {
+    renderItemPanel: appContext.ui.renderItemPanel,
+    openItemDefinitionInspector: appContext.ui.openItemDefinitionInspector,
+    closeItemDefinitionInspector: appContext.ui.closeItemDefinitionInspector,
+    openItemInstanceInspector: appContext.ui.openItemInstanceInspector,
+    closeItemInstanceInspector: appContext.ui.closeItemInstanceInspector,
+    updateItemDefinitionInspector: appContext.ui.updateItemDefinitionInspector,
+    updateItemInstanceInspector: appContext.ui.updateItemInstanceInspector,
+  },
+  appContext.network,
+);
+avatarEditorController = new AvatarEditorController(
+  {
+    overlay: avatarEditorOverlay,
+    stage: avatarEditorStage,
+    image: avatarEditorImage,
+  },
+  {
+    getIconSubject: () => {
+      const itemDefinition = sceneItemDefinitions.find((definition) => definition.id === inspectedItemDefinitionId);
+      if (itemDefinition) {
+        return {
+          id: itemDefinition.id,
+          name: itemDefinition.name,
+          iconSrc: itemDefinition.iconSrc,
+          iconScale: itemDefinition.iconScale,
+          iconOffsetX: itemDefinition.iconOffsetX,
+          iconOffsetY: itemDefinition.iconOffsetY,
+        };
+      }
+
+      const character = sceneCharacters.find((candidate) => candidate.id === inspectedCharacterId);
+      if (!character) {
+        return null;
+      }
+
+      return {
+        id: character.id,
+        name: character.name,
+        iconSrc: character.avatarSrc,
+        iconScale: character.avatarScale,
+        iconOffsetX: character.avatarOffsetX,
+        iconOffsetY: character.avatarOffsetY,
+      };
+    },
+    canEditIcon: () => {
+      if (inspectedItemDefinitionId) {
+        return isAdmin();
+      }
+
+      const character = sceneCharacters.find((candidate) => candidate.id === inspectedCharacterId);
+      return character ? canControlToken(character) : false;
+    },
+    findSubjectById: (subjectId) => {
+      const itemDefinition = sceneItemDefinitions.find((definition) => definition.id === subjectId);
+      if (itemDefinition) {
+        return {
+          id: itemDefinition.id,
+          name: itemDefinition.name,
+          iconSrc: itemDefinition.iconSrc,
+          iconScale: itemDefinition.iconScale,
+          iconOffsetX: itemDefinition.iconOffsetX,
+          iconOffsetY: itemDefinition.iconOffsetY,
+        };
+      }
+
+      const character = sceneCharacters.find((candidate) => candidate.id === subjectId);
+      if (!character) {
+        return null;
+      }
+
+      return {
+        id: character.id,
+        name: character.name,
+        iconSrc: character.avatarSrc,
+        iconScale: character.avatarScale,
+        iconOffsetX: character.avatarOffsetX,
+        iconOffsetY: character.avatarOffsetY,
+      };
+    },
+    iconImages: () => (inspectedItemDefinitionId ? itemIconImages : tokenAvatarImages),
+  },
+  {
+    onIconSaved: (subject) => {
+      const itemDefinition = sceneItemDefinitions.find((definition) => definition.id === subject.id);
+      if (itemDefinition) {
+        itemDefinition.iconSrc = subject.iconSrc;
+        itemDefinition.iconScale = subject.iconScale;
+        itemDefinition.iconOffsetX = subject.iconOffsetX;
+        itemDefinition.iconOffsetY = subject.iconOffsetY;
+        itemController.updateItemDefinitionIcon(itemDefinition);
+        return;
+      }
+
+      const character = sceneCharacters.find((candidate) => candidate.id === subject.id);
+      if (!character) {
+        return;
+      }
+
+      character.avatarSrc = subject.iconSrc;
+      character.avatarScale = subject.iconScale;
+      character.avatarOffsetX = subject.iconOffsetX;
+      character.avatarOffsetY = subject.iconOffsetY;
+      updateTokenAvatar(character);
+    },
+  },
 );
 const backgroundImageController = new BackgroundImageController(
   {
@@ -505,6 +723,14 @@ function renderCharacterPanel(): void {
 
 function setCharacterPanelOpen(open: boolean): void {
   characterPanelController.setOpen(open);
+}
+
+function renderItemPanel(): void {
+  itemPanelController.render();
+}
+
+function setItemPanelOpen(open: boolean): void {
+  itemPanelController.setOpen(open);
 }
 
 function getRollTargetTokenId(): string | null {
@@ -575,6 +801,26 @@ function getInspectedCharacter(): SceneCharacter | null {
 
 function getInspectedTokenInstance(): SceneToken | null {
   return inspectedCharacterId ? (sceneTokens.find((token) => token.id === inspectedCharacterId) ?? null) : null;
+}
+
+function getInspectedItemDefinition(): SceneItemDefinition | null {
+  return sceneItemDefinitions.find((definition) => definition.id === inspectedItemDefinitionId) ?? null;
+}
+
+function getInspectedItemInstance(): SceneItemInstance | null {
+  return sceneItemInstances.find((instance) => instance.id === inspectedItemInstanceId) ?? null;
+}
+
+function getItemDefinitionForInstance(instance: SceneItemInstance | null): SceneItemDefinition | null {
+  if (!instance) {
+    return null;
+  }
+
+  return sceneItemDefinitions.find((definition) => definition.id === instance.definitionId) ?? null;
+}
+
+function canInspectItem(): boolean {
+  return isLoggedIn();
 }
 
 function getSelectedDoor(): SceneDoor | null {
@@ -697,6 +943,9 @@ function showIdentityScreen(): void {
   selectedImageId = null;
   selectedTokenId = null;
   inspectedCharacterId = null;
+  inspectedItemDefinitionId = null;
+  inspectedItemInstanceId = null;
+  selectedItemInstanceId = null;
   selectedDoorId = null;
   selectedRoomId = null;
   interaction = null;
@@ -704,11 +953,14 @@ function showIdentityScreen(): void {
   previewRoomCells = [];
   previewTokenPosition = null;
   characterPanelController.setOpen(false);
+  itemPanelController.setOpen(false);
   identityBadge.textContent = identityLabel(null);
   renderIdentityList();
   rebuildModeOptions();
   updateModeControls();
   updateTokenInspector();
+  updateItemDefinitionInspector();
+  updateItemInstanceInspector();
   updateSelectionPanel();
   identityScreen.hidden = false;
 }
@@ -731,6 +983,10 @@ function render(): void {
       images: sceneImages,
       tokens: sceneTokens,
       tokenAvatarImages: new Map([...tokenAvatarImages].map(([tokenId, avatar]) => [tokenId, avatar.image])),
+      itemInstances: sceneItemInstances,
+      itemDefinitions: sceneItemDefinitions,
+      itemIconImages: new Map([...itemIconImages].map(([definitionId, icon]) => [definitionId, icon.image])),
+      selectedItemInstanceId,
       blockedVerticalEdges,
       blockedHorizontalEdges,
       doors: [...sceneDoors.values()],
@@ -771,6 +1027,10 @@ function hitTestImage(worldPoint: Vector2): SceneImage | null {
 
 function hitTestToken(worldPoint: Vector2): SceneToken | null {
   return findHitToken(sceneTokens, worldPoint, { interaction, movingTokens, previewTokenPosition }, camera.zoom);
+}
+
+function hitTestItemInstance(worldPoint: Vector2): SceneItemInstance | null {
+  return findHitItemInstance(sceneItemInstances, worldPoint, camera.zoom);
 }
 
 function roomAtCell(targetCell: Cell): SceneRoom | null {
@@ -918,8 +1178,13 @@ function openTokenInspector(characterId: string): void {
   }
 
   inspectedCharacterId = characterId;
+  inspectedItemDefinitionId = null;
+  inspectedItemInstanceId = null;
   tokenNameEditing = false;
+  avatarEditorTitle.textContent = "调整角色头像";
   updateTokenInspector();
+  updateItemDefinitionInspector();
+  updateItemInstanceInspector();
 }
 
 function closeTokenInspector(): void {
@@ -928,10 +1193,102 @@ function closeTokenInspector(): void {
   updateTokenInspector();
 }
 
+function openItemDefinitionInspector(definitionId: string): void {
+  if (!sceneItemDefinitions.some((definition) => definition.id === definitionId)) {
+    return;
+  }
+
+  inspectedItemDefinitionId = definitionId;
+  inspectedItemInstanceId = null;
+  itemNameEditing = false;
+  itemDescriptionEditing = false;
+  avatarEditorTitle.textContent = "调整物品图标";
+  updateItemDefinitionInspector();
+  updateItemInstanceInspector();
+}
+
+function closeItemDefinitionInspector(): void {
+  inspectedItemDefinitionId = null;
+  itemNameEditing = false;
+  itemDescriptionEditing = false;
+  updateItemDefinitionInspector();
+}
+
+function openItemInstanceInspector(instanceId: string): void {
+  if (!sceneItemInstances.some((instance) => instance.id === instanceId)) {
+    return;
+  }
+
+  inspectedItemInstanceId = instanceId;
+  inspectedItemDefinitionId = null;
+  itemNameEditing = false;
+  itemDescriptionEditing = false;
+  updateItemDefinitionInspector();
+  updateItemInstanceInspector();
+}
+
+function closeItemInstanceInspector(): void {
+  inspectedItemInstanceId = null;
+  updateItemInstanceInspector();
+}
+
+function updateItemDefinitionInspector(): void {
+  renderItemDefinitionInspectorPanel({
+    elements: {
+      itemDefinitionInspectorOverlay,
+      itemNameDisplay,
+      itemNameValue,
+      editItemNameButton,
+      itemNameInput,
+      itemDescriptionInput,
+      itemIconUploadInput,
+      itemIconUploadButton,
+      itemIconAdjustControls,
+      editItemIconButton,
+      resetItemIconAdjustmentButton,
+      deleteItemDefinitionButton,
+      itemDefinitionPanelHelp,
+    },
+    definition: getInspectedItemDefinition(),
+    isAdmin: isAdmin(),
+    isEditingItemName: itemNameEditing && isAdmin(),
+    isEditingItemDescription: itemDescriptionEditing && isAdmin(),
+    clearItemNameEditing: () => {
+      itemNameEditing = false;
+    },
+    clearItemDescriptionEditing: () => {
+      itemDescriptionEditing = false;
+    },
+  });
+}
+
+function updateItemInstanceInspector(): void {
+  const instance = getInspectedItemInstance();
+  renderItemInstanceInspectorPanel({
+    elements: {
+      itemInstanceInspectorOverlay,
+      itemInstanceNameValue,
+      itemInstanceDescriptionValue,
+      itemInstanceIconPreview,
+      itemQuantityInput,
+      deleteItemInstanceButton,
+      itemInstancePanelHelp,
+    },
+    definition: getItemDefinitionForInstance(instance),
+    instance,
+    stack: getItemStackForInstance(instance, sceneItemInstances),
+    definitionsById: new Map(sceneItemDefinitions.map((definition) => [definition.id, definition])),
+    iconImages: itemIconImages,
+    isAdmin: isAdmin(),
+    canInspect: canInspectItem(),
+  });
+}
+
 function selectImage(imageId: string | null): void {
   selectedImageId = imageId;
   if (imageId) {
     selectedTokenId = null;
+    selectedItemInstanceId = null;
     closeTokenInspector();
     selectedDoorId = null;
     renderDicePanel();
@@ -945,6 +1302,7 @@ function selectToken(tokenId: string | null, inspect = false): void {
     selectedImageId = null;
     selectedDoorId = null;
     selectedRoomId = null;
+    selectedItemInstanceId = null;
     if (inspect) {
       openTokenInspector(tokenId);
     }
@@ -955,11 +1313,28 @@ function selectToken(tokenId: string | null, inspect = false): void {
   updateSelectionPanel();
 }
 
+function selectItemInstance(instanceId: string | null, inspect = false): void {
+  selectedItemInstanceId = instanceId;
+  if (instanceId) {
+    selectedImageId = null;
+    selectedTokenId = null;
+    selectedDoorId = null;
+    selectedRoomId = null;
+    closeTokenInspector();
+    if (inspect) {
+      openItemInstanceInspector(instanceId);
+    }
+  }
+  renderDicePanel();
+  updateSelectionPanel();
+}
+
 function selectDoor(door: SceneDoor | null): void {
   selectedDoorId = door ? doorId(door) : null;
   if (door) {
     selectedImageId = null;
     selectedTokenId = null;
+    selectedItemInstanceId = null;
     closeTokenInspector();
     selectedRoomId = null;
     renderDicePanel();
@@ -972,6 +1347,7 @@ function selectRoom(roomId: string | null): void {
   if (roomId) {
     selectedImageId = null;
     selectedTokenId = null;
+    selectedItemInstanceId = null;
     closeTokenInspector();
     selectedDoorId = null;
     renderDicePanel();
@@ -1006,7 +1382,10 @@ function setAppMode(nextMode: AppMode): void {
 
   updateModeControls();
   renderCharacterPanel();
+  renderItemPanel();
   updateTokenInspector();
+  updateItemDefinitionInspector();
+  updateItemInstanceInspector();
   updateSelectionPanel();
 }
 
@@ -1090,10 +1469,27 @@ function updateModeControls(): void {
   renderDicePanel();
   renderChatPanel();
   renderCharacterPanel();
+  renderItemPanel();
 }
 
 function addCharacter(): void {
   characterTokenController.addCharacter();
+}
+
+function addItemDefinition(): void {
+  itemController.addItemDefinition();
+}
+
+function deleteItemDefinition(definitionId: string): void {
+  itemController.deleteItemDefinition(definitionId);
+}
+
+function placeItemAtCell(definitionId: string, cell: Cell): void {
+  itemController.placeItemAtCell(definitionId, cell);
+}
+
+function deleteItemInstance(instanceId: string): void {
+  itemController.deleteItemInstance(instanceId);
 }
 
 function updateCharacterIsNpc(isNpc: boolean): void {
@@ -1181,14 +1577,30 @@ function updateTokenAvatar(token: SceneCharacter): void {
 }
 
 async function uploadSelectedTokenAvatar(file: File): Promise<void> {
+  avatarEditorTitle.textContent = inspectedItemDefinitionId ? "调整物品图标" : "调整角色头像";
   await avatarEditorController.uploadSelected(file);
 }
 
 async function editSelectedTokenAvatar(): Promise<void> {
+  avatarEditorTitle.textContent = inspectedItemDefinitionId ? "调整物品图标" : "调整角色头像";
+  await avatarEditorController.editSelected();
+}
+
+async function uploadSelectedItemIcon(file: File): Promise<void> {
+  avatarEditorTitle.textContent = "调整物品图标";
+  await avatarEditorController.uploadSelected(file);
+}
+
+async function editSelectedItemIcon(): Promise<void> {
+  avatarEditorTitle.textContent = "调整物品图标";
   await avatarEditorController.editSelected();
 }
 
 function resetSelectedTokenAvatarAdjustment(): void {
+  avatarEditorController.resetSelectedAdjustment();
+}
+
+function resetSelectedItemIconAdjustment(): void {
   avatarEditorController.resetSelectedAdjustment();
 }
 
@@ -1236,6 +1648,7 @@ installCanvasInteractions({
     isPlayMode,
     canInspectDoor,
     canInspectToken,
+    canInspectItem,
     canControlToken,
     isTokenAnimating,
     getSelectedImage,
@@ -1244,6 +1657,7 @@ installCanvasInteractions({
     hitTestRoom,
     hitTestWallIntersection,
     hitTestToken,
+    hitTestItemInstance,
     hitTestDoor,
     hitTestImage,
     movementBlockedEdgeSets,
@@ -1251,14 +1665,17 @@ installCanvasInteractions({
   },
   actions: {
     closeTokenInspector,
+    closeItemDefinitionInspector,
     updateSelectionPanel,
     setCursor,
     placeCharacterAtCell,
+    placeItemAtCell,
     selectRoom,
     closedRegionAt,
     selectRoomFromCells,
     toggleDoorAtEdge,
     selectToken,
+    selectItemInstance,
     selectDoor,
     selectImage,
     updateRoomPreview,
@@ -1316,10 +1733,28 @@ installControlEventHandlers({
     characterToggleButton,
     characterCloseButton,
     addCharacterButton,
+    itemToggleButton,
+    itemCloseButton,
+    addItemButton,
     closeTokenInspectorButton,
     tokenInspectorOverlay,
     deleteTokenInstanceButton,
     tokenNpcTypeInput,
+    itemDefinitionInspectorOverlay,
+    closeItemDefinitionInspectorButton,
+    itemDefinitionSelectionForm,
+    editItemNameButton,
+    itemNameInput,
+    itemDescriptionInput,
+    itemIconUploadInput,
+    editItemIconButton,
+    resetItemIconAdjustmentButton,
+    deleteItemDefinitionButton,
+    itemInstanceInspectorOverlay,
+    closeItemInstanceInspectorButton,
+    itemInstanceSelectionForm,
+    itemQuantityInput,
+    deleteItemInstanceButton,
   },
   state: {
     isLoggedIn,
@@ -1333,7 +1768,10 @@ installControlEventHandlers({
     isLogicMapVisible: appContext.state.getIsLogicMapVisible,
     isChatPanelOpen: () => chatPanelController.isOpen,
     isCharacterPanelOpen: () => characterPanelController.isOpen,
+    isItemPanelOpen: () => itemPanelController.isOpen,
     inspectedTokenInstance: getInspectedTokenInstance,
+    inspectedItemInstance: getInspectedItemInstance,
+    inspectedItemDefinitionId: () => inspectedItemDefinitionId,
   },
   actions: {
     setAppMode,
@@ -1364,6 +1802,22 @@ installControlEventHandlers({
     setChatPanelOpen,
     setCharacterPanelOpen,
     addCharacter,
+    setItemPanelOpen,
+    addItemDefinition,
+    startItemNameEditing: () => itemController.startItemNameEditing(),
+    updateItemDefinitionName: (name) => itemController.updateItemDefinitionName(name),
+    stopItemNameEditing: () => itemController.stopItemNameEditing(),
+    updateItemDefinitionDescription: (description) => itemController.updateItemDefinitionDescription(description),
+    stopItemDescriptionEditing: () => itemController.stopItemDescriptionEditing(),
+    uploadSelectedItemIcon,
+    editSelectedItemIcon,
+    resetSelectedItemIconAdjustment,
+    closeItemDefinitionInspector,
+    deleteItemDefinition,
+    closeItemInstanceInspector,
+    updateItemInstanceQuantity: (quantity) => itemController.updateItemInstanceQuantity(quantity),
+    stopItemQuantityEditing: () => itemController.stopItemQuantityEditing(),
+    deleteItemInstance,
     updateCharacterIsNpc,
     closeTokenInspector,
     deleteToken,
@@ -1380,6 +1834,9 @@ showIdentityScreen();
 renderDicePanel();
 renderChatPanel();
 renderCharacterPanel();
+renderItemPanel();
 updateTokenInspector();
+updateItemDefinitionInspector();
+updateItemInstanceInspector();
 resizeCanvas();
 requestAnimationFrame(tick);

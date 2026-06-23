@@ -1,5 +1,5 @@
 import { Trash2, createIcons } from "lucide";
-import type { Cell, ChatMessage, SceneCharacter, SceneToken } from "../core/types";
+import type { Cell, ChatMessage, SceneCharacter, SceneItemDefinition, SceneItemInstance, SceneToken } from "../core/types";
 import type { NetworkSnapshot } from "../services/networkClient";
 
 function formatLatency(latencyMs: number | null): string {
@@ -423,6 +423,174 @@ export class CharacterPanelController {
       deleteCharacter: this.actions.deleteCharacter,
       openTokenInspector: this.actions.openTokenInspector,
     });
+
+    createIcons({
+      icons: { Trash2 },
+      nameAttr: "data-lucide",
+      attrs: {
+        "aria-hidden": "true",
+        class: "tool-icon",
+        focusable: "false",
+      },
+    });
+  }
+}
+
+function createItemRow(options: {
+  definition: SceneItemDefinition;
+  instances: SceneItemInstance[];
+  iconImages: Map<string, { src: string; image: HTMLImageElement }>;
+  isAdmin: boolean;
+  deleteItemDefinition: (definitionId: string) => void;
+  openItemDefinitionInspector: (definitionId: string) => void;
+}): HTMLDivElement {
+  const { definition, instances, iconImages, isAdmin, deleteItemDefinition, openItemDefinitionInspector } = options;
+  const row = document.createElement("div");
+  const entry = document.createElement("button");
+  const avatar = document.createElement("span");
+  const text = document.createElement("span");
+  const name = document.createElement("span");
+  const status = document.createElement("span");
+  const deleteButton = document.createElement("button");
+  const instanceCount = instances.filter((instance) => instance.definitionId === definition.id).length;
+  const iconImage = iconImages.get(definition.id);
+
+  row.className = "character-row item-row";
+  row.classList.toggle("is-on-map", instanceCount > 0);
+  entry.type = "button";
+  entry.className = "character-entry item-entry";
+  entry.draggable = true;
+  entry.dataset.itemDefinitionId = definition.id;
+  avatar.className = "character-avatar item-icon";
+  text.className = "character-text";
+  name.className = "character-name";
+  status.className = "character-status";
+  name.textContent = definition.name;
+  status.textContent = instanceCount > 0 ? `场景中 ${instanceCount} 个` : "可拖入地图";
+
+  if (iconImage) {
+    const image = document.createElement("img");
+    const diameter = 100;
+    const radius = diameter / 2;
+    const scale = definition.iconScale ?? 1;
+    const offsetX = (definition.iconOffsetX ?? 0) * radius;
+    const offsetY = (definition.iconOffsetY ?? 0) * radius;
+    const ratio = iconImage.image.naturalWidth / iconImage.image.naturalHeight || 1;
+    const width = ratio >= 1 ? diameter * scale * ratio : diameter * scale;
+    const height = ratio >= 1 ? diameter * scale : (diameter * scale) / ratio;
+
+    image.src = iconImage.src;
+    image.alt = `${definition.name} 图标`;
+    image.style.width = `${width}%`;
+    image.style.height = `${height}%`;
+    image.style.left = `${50 + offsetX}%`;
+    image.style.top = `${50 + offsetY}%`;
+    avatar.append(image);
+  } else {
+    avatar.textContent = definition.name.trim().slice(0, 1) || "物";
+  }
+
+  deleteButton.type = "button";
+  deleteButton.className = "delete-character-button delete-item-button";
+  deleteButton.setAttribute("aria-label", `删除物品 ${definition.name}`);
+  deleteButton.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Z"/><path d="M6 9h12l-1 12H7L6 9Zm4 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z"/></svg>';
+  deleteButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    deleteItemDefinition(definition.id);
+  });
+
+  entry.addEventListener("click", () => openItemDefinitionInspector(definition.id));
+  entry.addEventListener("dragstart", (event) => {
+    if (!event.dataTransfer || !isAdmin) {
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData("application/x-trpg-item-definition-id", definition.id);
+    event.dataTransfer.setData("text/plain", definition.id);
+  });
+
+  text.append(name, status);
+  entry.append(avatar, text);
+  row.append(entry, deleteButton);
+  return row;
+}
+
+export class ItemPanelController {
+  private panelOpen = false;
+
+  constructor(
+    private readonly elements: {
+      panel: HTMLElement;
+      toggleButton: HTMLButtonElement;
+      addButton: HTMLButtonElement;
+      list: HTMLDivElement;
+    },
+    private readonly state: {
+      canShowItems: () => boolean;
+      isAdmin: () => boolean;
+      definitions: () => SceneItemDefinition[];
+      instances: () => SceneItemInstance[];
+      iconImages: () => Map<string, { src: string; image: HTMLImageElement }>;
+    },
+    private readonly actions: {
+      deleteItemDefinition: (definitionId: string) => void;
+      openItemDefinitionInspector: (definitionId: string) => void;
+    },
+  ) {}
+
+  get isOpen(): boolean {
+    return this.panelOpen;
+  }
+
+  setOpen(open: boolean): void {
+    this.panelOpen = open && this.state.canShowItems();
+    this.render();
+  }
+
+  render(): void {
+    const canShowItems = this.state.canShowItems();
+
+    if (!canShowItems) {
+      this.panelOpen = false;
+    }
+
+    const { panel, toggleButton, addButton, list } = this.elements;
+    toggleButton.classList.toggle("is-hidden", !canShowItems);
+    toggleButton.classList.toggle("is-active", canShowItems && this.panelOpen);
+    toggleButton.disabled = !canShowItems;
+    toggleButton.setAttribute("aria-pressed", String(canShowItems && this.panelOpen));
+    toggleButton.setAttribute("aria-label", this.panelOpen ? "关闭物品图鉴" : "打开物品图鉴");
+    panel.hidden = !canShowItems;
+    panel.classList.toggle("is-open", canShowItems && this.panelOpen);
+    panel.setAttribute("aria-hidden", String(!canShowItems || !this.panelOpen));
+    addButton.disabled = !canShowItems;
+
+    const definitions = this.state.definitions();
+    const instances = this.state.instances();
+    const iconImages = this.state.iconImages();
+    const isAdmin = this.state.isAdmin();
+
+    if (definitions.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "character-empty";
+      empty.textContent = "还没有物品。";
+      list.replaceChildren(empty);
+    } else {
+      list.replaceChildren(
+        ...definitions.map((definition) =>
+          createItemRow({
+            definition,
+            instances,
+            iconImages,
+            isAdmin,
+            deleteItemDefinition: this.actions.deleteItemDefinition,
+            openItemDefinitionInspector: this.actions.openItemDefinitionInspector,
+          }),
+        ),
+      );
+    }
 
     createIcons({
       icons: { Trash2 },

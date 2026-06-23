@@ -6,6 +6,8 @@ import type {
   SceneCharacter,
   SceneDoor,
   SceneImageSnapshot,
+  SceneItemDefinition,
+  SceneItemInstance,
   SceneRoom,
   SceneToken,
   WallEdgeType,
@@ -33,6 +35,8 @@ export type SceneSnapshot = {
   images: SceneImageSnapshot[];
   characters: SceneCharacter[];
   tokens: SceneToken[];
+  itemDefinitions: SceneItemDefinition[];
+  itemInstances: SceneItemInstance[];
   blockedVerticalEdges: string[];
   blockedHorizontalEdges: string[];
   doors: SceneDoor[];
@@ -57,6 +61,10 @@ export type ScenePatch = {
   characterDeletes?: string[];
   tokenUpserts?: SceneToken[];
   tokenDeletes?: string[];
+  itemDefinitionUpserts?: SceneItemDefinition[];
+  itemDefinitionDeletes?: string[];
+  itemInstanceUpserts?: SceneItemInstance[];
+  itemInstanceDeletes?: string[];
   blockedVerticalEdges?: BlockedEdgeChange[];
   blockedHorizontalEdges?: BlockedEdgeChange[];
   blockedEdgesClear?: boolean;
@@ -86,6 +94,8 @@ type NetworkMessage =
       images?: SceneImageSnapshot[];
       characters?: SceneCharacter[];
       tokens: SceneToken[];
+      itemDefinitions?: SceneItemDefinition[];
+      itemInstances?: SceneItemInstance[];
       blockedVerticalEdges?: string[];
       blockedHorizontalEdges?: string[];
       doors?: SceneDoor[];
@@ -164,6 +174,48 @@ export class NetworkClient {
     this.send({
       type: "scene:character-delete",
       characterId,
+    });
+  }
+
+  sendItemDefinitionAdded(definition: SceneItemDefinition): void {
+    this.send({
+      type: "scene:item-definition-add",
+      definition,
+    });
+  }
+
+  sendItemDefinitionUpdated(definition: SceneItemDefinition): void {
+    this.send({
+      type: "scene:item-definition-update",
+      definition,
+    });
+  }
+
+  sendItemDefinitionDeleted(definitionId: string): void {
+    this.send({
+      type: "scene:item-definition-delete",
+      definitionId,
+    });
+  }
+
+  sendItemInstanceAdded(instance: SceneItemInstance): void {
+    this.send({
+      type: "scene:item-instance-add",
+      instance,
+    });
+  }
+
+  sendItemInstanceUpdated(instance: SceneItemInstance): void {
+    this.send({
+      type: "scene:item-instance-update",
+      instance,
+    });
+  }
+
+  sendItemInstanceDeleted(instanceId: string): void {
+    this.send({
+      type: "scene:item-instance-delete",
+      instanceId,
     });
   }
 
@@ -358,6 +410,8 @@ export class NetworkClient {
         images: message.images ?? [],
         characters: message.characters ?? message.tokens,
         tokens: message.tokens,
+        itemDefinitions: message.itemDefinitions ?? [],
+        itemInstances: message.itemInstances ?? [],
         blockedVerticalEdges: message.blockedVerticalEdges ?? [],
         blockedHorizontalEdges: message.blockedHorizontalEdges ?? [],
         doors: message.doors ?? [],

@@ -1,6 +1,11 @@
-import { GRID_CELL_SIZE, HANDLE_RADIUS, TOKEN_RADIUS } from "../../core/constants";
+import { GRID_CELL_SIZE, HANDLE_RADIUS, ITEM_RADIUS, TOKEN_RADIUS } from "../../core/constants";
 import { easeInOutCubic } from "../../utilities/geometry";
 import { cellCenter, roomCenter } from "../grid/grid";
+import {
+  buildItemDisplayLabel,
+  formatStackLabelLines,
+  groupItemInstancesByCell,
+} from "../items/itemStacks";
 import { getImageCorners, getResizeHandlePositions, getRotateHandlePosition } from "../image/imageTransform";
 import type {
   Cell,
@@ -10,6 +15,8 @@ import type {
   ResizeHandle,
   SceneDoor,
   SceneImage,
+  SceneItemDefinition,
+  SceneItemInstance,
   SceneRoom,
   SceneToken,
   Vector2,
@@ -28,6 +35,10 @@ export type RenderState = {
   images: SceneImage[];
   tokens: SceneToken[];
   tokenAvatarImages: Map<string, HTMLImageElement>;
+  itemInstances: SceneItemInstance[];
+  itemDefinitions: SceneItemDefinition[];
+  itemIconImages: Map<string, HTMLImageElement>;
+  selectedItemInstanceId: string | null;
   blockedVerticalEdges: Set<string>;
   blockedHorizontalEdges: Set<string>;
   doors: SceneDoor[];
@@ -68,6 +79,7 @@ export function renderScene(ctx: CanvasRenderingContext2D, viewport: Viewport, s
   if (state.previewPath.length > 0) {
     drawPath(ctx, viewport, state.previewPath);
   }
+  drawItemInstances(ctx, viewport, state);
   drawTokens(ctx, viewport, state);
 
   if (state.selectedImage) {
@@ -363,6 +375,102 @@ function drawTokens(ctx: CanvasRenderingContext2D, viewport: Viewport, state: Re
   }
 }
 
+function drawItemInstances(ctx: CanvasRenderingContext2D, viewport: Viewport, state: RenderState): void {
+  const definitionsById = new Map(state.itemDefinitions.map((definition) => [definition.id, definition]));
+
+  for (const stack of groupItemInstancesByCell(state.itemInstances)) {
+    const primaryInstance = stack.instances[0];
+    const definition = definitionsById.get(primaryInstance.definitionId);
+    if (!definition) {
+      continue;
+    }
+
+    const worldPoint = cellCenter(stack.cell);
+    const screenPoint = viewport.worldToScreen(worldPoint);
+    const radius = ITEM_RADIUS * viewport.camera.zoom;
+    const isSelected = stack.instances.some((instance) => instance.id === state.selectedItemInstanceId);
+    const iconImage = state.itemIconImages.get(definition.id) ?? null;
+    const isStack = stack.instances.length > 1;
+    const label = buildItemDisplayLabel(stack, definitionsById);
+
+    ctx.save();
+    if (isStack) {
+      drawItemStackBackdrop(ctx, screenPoint, radius);
+    }
+
+    ctx.beginPath();
+    ctx.arc(screenPoint.x, screenPoint.y, radius, 0, Math.PI * 2);
+    if (iconImage) {
+      drawItemIcon(ctx, iconImage, definition, screenPoint, radius);
+    } else {
+      ctx.fillStyle = "rgb(148 163 184 / 0.88)";
+      ctx.fill();
+      ctx.fillStyle = "#0f172a";
+      ctx.font = `${Math.max(11, 13 * viewport.camera.zoom)}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(definition.name.trim().slice(0, 1) || "物", screenPoint.x, screenPoint.y);
+    }
+
+    drawItemOutline(ctx, screenPoint, radius, isSelected);
+    drawItemStackName(ctx, label, screenPoint, radius, viewport.camera.zoom);
+
+    ctx.restore();
+  }
+}
+
+function drawItemStackBackdrop(ctx: CanvasRenderingContext2D, screenPoint: Vector2, radius: number): void {
+  const offsets = [
+    { x: radius * 0.24, y: -radius * 0.2 },
+    { x: -radius * 0.2, y: radius * 0.22 },
+  ];
+
+  for (const offset of offsets) {
+    ctx.beginPath();
+    ctx.arc(screenPoint.x + offset.x, screenPoint.y + offset.y, radius * 0.86, 0, Math.PI * 2);
+    ctx.fillStyle = "rgb(100 116 139 / 0.72)";
+    ctx.fill();
+    ctx.strokeStyle = "rgb(255 255 255 / 0.42)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+}
+
+function drawItemIcon(
+  ctx: CanvasRenderingContext2D,
+  iconImage: HTMLImageElement,
+  definition: SceneItemDefinition,
+  screenPoint: Vector2,
+  radius: number,
+): void {
+  const diameter = radius * 2;
+  const scale = definition.iconScale ?? 1;
+  const offsetX = (definition.iconOffsetX ?? 0) * radius;
+  const offsetY = (definition.iconOffsetY ?? 0) * radius;
+  const ratio = iconImage.naturalWidth / iconImage.naturalHeight || 1;
+  const width = ratio >= 1 ? diameter * scale * ratio : diameter * scale;
+  const height = ratio >= 1 ? diameter * scale : (diameter * scale) / ratio;
+
+  ctx.save();
+  ctx.clip();
+  ctx.drawImage(
+    iconImage,
+    screenPoint.x - width / 2 + offsetX,
+    screenPoint.y - height / 2 + offsetY,
+    width,
+    height,
+  );
+  ctx.restore();
+}
+
+function drawItemOutline(ctx: CanvasRenderingContext2D, screenPoint: Vector2, radius: number, isSelected: boolean): void {
+  ctx.beginPath();
+  ctx.arc(screenPoint.x, screenPoint.y, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = isSelected ? "#ffffff" : "rgb(255 255 255 / 0.76)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
 function drawTokenOutline(ctx: CanvasRenderingContext2D, screenPoint: Vector2, radius: number, isSelected: boolean): void {
   const lineWidth = isSelected ? 4 : 2;
   const outlineRadius = isSelected ? radius + lineWidth / 2 : radius;
@@ -372,6 +480,28 @@ function drawTokenOutline(ctx: CanvasRenderingContext2D, screenPoint: Vector2, r
   ctx.strokeStyle = isSelected ? "#ffffff" : "rgb(255 255 255 / 0.76)";
   ctx.lineWidth = lineWidth;
   ctx.stroke();
+}
+
+function drawItemStackName(
+  ctx: CanvasRenderingContext2D,
+  label: string,
+  screenPoint: Vector2,
+  radius: number,
+  zoom: number,
+): void {
+  const lines = formatStackLabelLines(label);
+  const fontSize = Math.max(10, 11 * zoom);
+  const lineHeight = fontSize * 1.2;
+  const startY = screenPoint.y + radius + Math.max(3, 4 * zoom);
+
+  ctx.fillStyle = "rgb(255 255 255 / 0.58)";
+  ctx.font = `${fontSize}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+
+  lines.forEach((line, index) => {
+    ctx.fillText(line, screenPoint.x, startY + index * lineHeight);
+  });
 }
 
 function drawTokenName(

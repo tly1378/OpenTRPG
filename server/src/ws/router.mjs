@@ -2,6 +2,12 @@ import { handleChatDice } from "../handlers/chat/dice.mjs";
 import { handleHello } from "../handlers/hello.mjs";
 import { handlePong } from "../handlers/pong.mjs";
 import { handleSceneCharacterAdd, handleSceneCharacterDelete, handleSceneCharacterUpdate } from "../handlers/scene/characters.mjs";
+import { handleSceneItemDefinitionAdd, handleSceneItemDefinitionDelete, handleSceneItemDefinitionUpdate } from "../handlers/scene/items.mjs";
+import {
+  handleSceneItemInstanceAdd,
+  handleSceneItemInstanceDelete,
+  handleSceneItemInstanceUpdate,
+} from "../handlers/scene/itemInstances.mjs";
 import { handleSceneImageAdd, handleSceneImageDelete, handleSceneImagesUpdate, handleSceneImageUpdate } from "../handlers/scene/images.mjs";
 import {
   handleBlockedEdgeSet,
@@ -25,6 +31,12 @@ const messageHandlers = {
   "scene:character-add": handleSceneCharacterAdd,
   "scene:character-update": handleSceneCharacterUpdate,
   "scene:character-delete": handleSceneCharacterDelete,
+  "scene:item-definition-add": handleSceneItemDefinitionAdd,
+  "scene:item-definition-update": handleSceneItemDefinitionUpdate,
+  "scene:item-definition-delete": handleSceneItemDefinitionDelete,
+  "scene:item-instance-add": handleSceneItemInstanceAdd,
+  "scene:item-instance-update": handleSceneItemInstanceUpdate,
+  "scene:item-instance-delete": handleSceneItemInstanceDelete,
   "scene:token-delete": handleSceneTokenDelete,
   "scene:image-add": handleSceneImageAdd,
   "scene:image-update": handleSceneImageUpdate,

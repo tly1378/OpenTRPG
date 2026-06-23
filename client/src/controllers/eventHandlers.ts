@@ -1,5 +1,5 @@
 import type { DiceSides } from "../core/appState";
-import type { AppMode, EditMode, LogicTool, SceneToken } from "../core/types";
+import type { AppMode, EditMode, LogicTool, SceneItemInstance, SceneToken } from "../core/types";
 
 export function installControlEventHandlers(options: {
   elements: {
@@ -41,9 +41,27 @@ export function installControlEventHandlers(options: {
     characterToggleButton: HTMLButtonElement;
     characterCloseButton: HTMLButtonElement;
     addCharacterButton: HTMLButtonElement;
+    itemToggleButton: HTMLButtonElement;
+    itemCloseButton: HTMLButtonElement;
+    addItemButton: HTMLButtonElement;
     closeTokenInspectorButton: HTMLButtonElement;
     tokenInspectorOverlay: HTMLElement;
     deleteTokenInstanceButton: HTMLButtonElement;
+    itemDefinitionInspectorOverlay: HTMLElement;
+    closeItemDefinitionInspectorButton: HTMLButtonElement;
+    itemDefinitionSelectionForm: HTMLFormElement;
+    editItemNameButton: HTMLButtonElement;
+    itemNameInput: HTMLInputElement;
+    itemDescriptionInput: HTMLTextAreaElement;
+    itemIconUploadInput: HTMLInputElement;
+    editItemIconButton: HTMLButtonElement;
+    resetItemIconAdjustmentButton: HTMLButtonElement;
+    deleteItemDefinitionButton: HTMLButtonElement;
+    itemInstanceInspectorOverlay: HTMLElement;
+    closeItemInstanceInspectorButton: HTMLButtonElement;
+    itemInstanceSelectionForm: HTMLFormElement;
+    itemQuantityInput: HTMLInputElement;
+    deleteItemInstanceButton: HTMLButtonElement;
   };
   state: {
     isLoggedIn: () => boolean;
@@ -57,7 +75,10 @@ export function installControlEventHandlers(options: {
     isLogicMapVisible: () => boolean;
     isChatPanelOpen: () => boolean;
     isCharacterPanelOpen: () => boolean;
+    isItemPanelOpen: () => boolean;
     inspectedTokenInstance: () => SceneToken | null;
+    inspectedItemInstance: () => SceneItemInstance | null;
+    inspectedItemDefinitionId: () => string | null;
   };
   actions: {
     setAppMode: (mode: AppMode) => void;
@@ -88,6 +109,22 @@ export function installControlEventHandlers(options: {
     setChatPanelOpen: (open: boolean) => void;
     setCharacterPanelOpen: (open: boolean) => void;
     addCharacter: () => void;
+    setItemPanelOpen: (open: boolean) => void;
+    addItemDefinition: () => void;
+    startItemNameEditing: () => void;
+    updateItemDefinitionName: (name: string) => void;
+    stopItemNameEditing: () => void;
+    updateItemDefinitionDescription: (description: string) => void;
+    stopItemDescriptionEditing: () => void;
+    uploadSelectedItemIcon: (file: File) => Promise<void>;
+    editSelectedItemIcon: () => Promise<void>;
+    resetSelectedItemIconAdjustment: () => void;
+    closeItemDefinitionInspector: () => void;
+    deleteItemDefinition: (definitionId: string) => void;
+    closeItemInstanceInspector: () => void;
+    updateItemInstanceQuantity: (quantity: number) => void;
+    stopItemQuantityEditing: () => void;
+    deleteItemInstance: (instanceId: string) => void;
     updateCharacterIsNpc: (isNpc: boolean) => void;
     closeTokenInspector: () => void;
     deleteToken: (tokenId: string) => void;
@@ -240,6 +277,78 @@ export function installControlEventHandlers(options: {
     actions.setCharacterPanelOpen(false);
   });
   elements.addCharacterButton.addEventListener("click", actions.addCharacter);
+  elements.itemToggleButton.addEventListener("click", () => {
+    actions.setItemPanelOpen(!state.isItemPanelOpen());
+  });
+  elements.itemCloseButton.addEventListener("click", () => {
+    actions.setItemPanelOpen(false);
+  });
+  elements.addItemButton.addEventListener("click", actions.addItemDefinition);
+  elements.editItemNameButton.addEventListener("click", actions.startItemNameEditing);
+  elements.itemNameInput.addEventListener("input", () => {
+    actions.updateItemDefinitionName(elements.itemNameInput.value);
+  });
+  elements.itemNameInput.addEventListener("change", () => {
+    actions.updateItemDefinitionName(elements.itemNameInput.value);
+  });
+  elements.itemNameInput.addEventListener("blur", actions.stopItemNameEditing);
+  elements.itemDefinitionSelectionForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    actions.updateItemDefinitionName(elements.itemNameInput.value);
+    actions.stopItemNameEditing();
+  });
+  elements.itemDescriptionInput.addEventListener("input", () => {
+    actions.updateItemDefinitionDescription(elements.itemDescriptionInput.value);
+  });
+  elements.itemDescriptionInput.addEventListener("blur", actions.stopItemDescriptionEditing);
+  elements.itemIconUploadInput.addEventListener("change", () => {
+    const file = elements.itemIconUploadInput.files?.[0];
+    if (file) {
+      void actions.uploadSelectedItemIcon(file).catch((error: unknown) => {
+        console.error(error);
+      });
+    }
+
+    elements.itemIconUploadInput.value = "";
+  });
+  elements.editItemIconButton.addEventListener("click", () => {
+    void actions.editSelectedItemIcon().catch((error: unknown) => {
+      console.error(error);
+    });
+  });
+  elements.resetItemIconAdjustmentButton.addEventListener("click", actions.resetSelectedItemIconAdjustment);
+  elements.closeItemDefinitionInspectorButton.addEventListener("click", actions.closeItemDefinitionInspector);
+  elements.itemDefinitionInspectorOverlay.addEventListener("click", (event) => {
+    if (event.target === elements.itemDefinitionInspectorOverlay) {
+      actions.closeItemDefinitionInspector();
+    }
+  });
+  elements.deleteItemDefinitionButton.addEventListener("click", () => {
+    const definitionId = state.inspectedItemDefinitionId();
+    if (definitionId && state.isAdmin()) {
+      actions.deleteItemDefinition(definitionId);
+    }
+  });
+  elements.closeItemInstanceInspectorButton.addEventListener("click", actions.closeItemInstanceInspector);
+  elements.itemInstanceInspectorOverlay.addEventListener("click", (event) => {
+    if (event.target === elements.itemInstanceInspectorOverlay) {
+      actions.closeItemInstanceInspector();
+    }
+  });
+  elements.itemQuantityInput.addEventListener("change", () => {
+    actions.stopItemQuantityEditing();
+  });
+  elements.itemQuantityInput.addEventListener("blur", actions.stopItemQuantityEditing);
+  elements.itemInstanceSelectionForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    actions.stopItemQuantityEditing();
+  });
+  elements.deleteItemInstanceButton.addEventListener("click", () => {
+    const instance = state.inspectedItemInstance();
+    if (instance && state.isAdmin()) {
+      actions.deleteItemInstance(instance.id);
+    }
+  });
   elements.closeTokenInspectorButton.addEventListener("click", actions.closeTokenInspector);
   elements.tokenInspectorOverlay.addEventListener("click", (event) => {
     if (event.target === elements.tokenInspectorOverlay) {

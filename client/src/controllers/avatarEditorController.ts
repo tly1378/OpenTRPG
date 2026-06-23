@@ -1,13 +1,21 @@
 import { loadImageFile, loadImageSource } from "../modules/image/imageImport";
-import type { SceneCharacter } from "../core/types";
 
 type TokenAvatarImage = {
   src: string;
   image: HTMLImageElement;
 };
 
+export type IconEditSubject = {
+  id: string;
+  name: string;
+  iconSrc?: string;
+  iconScale?: number;
+  iconOffsetX?: number;
+  iconOffsetY?: number;
+};
+
 type AvatarEditorState = {
-  tokenId: string;
+  subjectId: string;
   src: string;
   image: HTMLImageElement;
   scale: number;
@@ -31,21 +39,21 @@ export class AvatarEditorController {
       image: HTMLImageElement;
     },
     private readonly state: {
-      inspectedCharacter: () => SceneCharacter | null;
-      canControlToken: (token: SceneCharacter) => boolean;
-      characters: () => SceneCharacter[];
-      avatarImages: () => Map<string, TokenAvatarImage>;
+      getIconSubject: () => IconEditSubject | null;
+      canEditIcon: () => boolean;
+      findSubjectById: (subjectId: string) => IconEditSubject | null;
+      iconImages: () => Map<string, TokenAvatarImage>;
     },
     private readonly actions: {
-      updateTokenAvatar: (token: SceneCharacter) => void;
+      onIconSaved: (subject: IconEditSubject) => void;
     },
   ) {
     this.installStageHandlers();
   }
 
   async uploadSelected(file: File): Promise<void> {
-    const token = this.state.inspectedCharacter();
-    if (!token || !this.state.canControlToken(token)) {
+    const subject = this.state.getIconSubject();
+    if (!subject || !this.state.canEditIcon()) {
       return;
     }
 
@@ -54,7 +62,7 @@ export class AvatarEditorController {
       return;
     }
 
-    this.open(token, loadedAvatar.src, loadedAvatar.image, {
+    this.open(subject, loadedAvatar.src, loadedAvatar.image, {
       scale: 1,
       offsetX: 0,
       offsetY: 0,
@@ -62,32 +70,32 @@ export class AvatarEditorController {
   }
 
   async editSelected(): Promise<void> {
-    const token = this.state.inspectedCharacter();
-    if (!token || !this.state.canControlToken(token) || !token.avatarSrc) {
+    const subject = this.state.getIconSubject();
+    if (!subject || !this.state.canEditIcon() || !subject.iconSrc) {
       return;
     }
 
-    const cachedAvatar = this.state.avatarImages().get(token.id);
+    const cachedAvatar = this.state.iconImages().get(subject.id);
     const image =
-      cachedAvatar?.src === token.avatarSrc ? cachedAvatar.image : await loadImageSource(token.avatarSrc, `${token.name} 头像`);
+      cachedAvatar?.src === subject.iconSrc ? cachedAvatar.image : await loadImageSource(subject.iconSrc, `${subject.name} 图标`);
 
-    this.open(token, token.avatarSrc, image, {
-      scale: token.avatarScale ?? 1,
-      offsetX: token.avatarOffsetX ?? 0,
-      offsetY: token.avatarOffsetY ?? 0,
+    this.open(subject, subject.iconSrc, image, {
+      scale: subject.iconScale ?? 1,
+      offsetX: subject.iconOffsetX ?? 0,
+      offsetY: subject.iconOffsetY ?? 0,
     });
   }
 
   resetSelectedAdjustment(): void {
-    const token = this.state.inspectedCharacter();
-    if (!token || !this.state.canControlToken(token) || !token.avatarSrc) {
+    const subject = this.state.getIconSubject();
+    if (!subject || !this.state.canEditIcon() || !subject.iconSrc) {
       return;
     }
 
-    token.avatarScale = 1;
-    token.avatarOffsetX = 0;
-    token.avatarOffsetY = 0;
-    this.actions.updateTokenAvatar(token);
+    subject.iconScale = 1;
+    subject.iconOffsetX = 0;
+    subject.iconOffsetY = 0;
+    this.actions.onIconSaved(subject);
   }
 
   render(): void {
@@ -127,30 +135,30 @@ export class AvatarEditorController {
       return;
     }
 
-    const token = this.state.characters().find((candidate) => candidate.id === this.editor?.tokenId);
-    if (!token || !this.state.canControlToken(token)) {
+    const subject = this.state.findSubjectById(this.editor.subjectId);
+    if (!subject || !this.state.canEditIcon()) {
       this.close();
       return;
     }
 
     const transform = this.clampTransform(this.editor, this.editor);
-    token.avatarSrc = this.editor.src;
-    token.avatarScale = transform.scale;
-    token.avatarOffsetX = transform.offsetX;
-    token.avatarOffsetY = transform.offsetY;
-    this.state.avatarImages().set(token.id, { src: this.editor.src, image: this.editor.image });
-    this.actions.updateTokenAvatar(token);
+    subject.iconSrc = this.editor.src;
+    subject.iconScale = transform.scale;
+    subject.iconOffsetX = transform.offsetX;
+    subject.iconOffsetY = transform.offsetY;
+    this.state.iconImages().set(subject.id, { src: this.editor.src, image: this.editor.image });
+    this.actions.onIconSaved(subject);
     this.close();
   }
 
   private open(
-    token: SceneCharacter,
+    subject: IconEditSubject,
     src: string,
     image: HTMLImageElement,
     transform: { scale: number; offsetX: number; offsetY: number },
   ): void {
     this.editor = {
-      tokenId: token.id,
+      subjectId: subject.id,
       src,
       image,
       scale: transform.scale,

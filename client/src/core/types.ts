@@ -74,6 +74,23 @@ export type SceneToken = SceneCharacter & {
   cell: Cell;
 };
 
+export type SceneItemDefinition = {
+  id: string;
+  name: string;
+  description?: string;
+  iconSrc?: string;
+  iconScale?: number;
+  iconOffsetX?: number;
+  iconOffsetY?: number;
+};
+
+export type SceneItemInstance = {
+  id: string;
+  definitionId: string;
+  cell: Cell;
+  quantity: number;
+};
+
 export type SceneDoor = {
   type: WallEdgeType;
   x: number;

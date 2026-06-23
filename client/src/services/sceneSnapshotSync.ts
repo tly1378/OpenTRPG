@@ -6,6 +6,8 @@ import type {
   SceneDoor,
   SceneImage,
   SceneImageSnapshot,
+  SceneItemDefinition,
+  SceneItemInstance,
   SceneRoom,
   SceneToken,
 } from "../core/types";
@@ -20,7 +22,10 @@ export type SceneSyncApplierContext = {
   sceneImages: SceneImage[];
   sceneCharacters: SceneCharacter[];
   sceneTokens: SceneToken[];
+  sceneItemDefinitions: SceneItemDefinition[];
+  sceneItemInstances: SceneItemInstance[];
   tokenAvatarImages: Map<string, TokenAvatarImage>;
+  itemIconImages: Map<string, TokenAvatarImage>;
   blockedVerticalEdges: Set<string>;
   blockedHorizontalEdges: Set<string>;
   sceneDoors: Map<string, SceneDoor>;
@@ -34,6 +39,12 @@ export type SceneSyncApplierContext = {
   setSelectedTokenId: (tokenId: string | null) => void;
   getInspectedCharacterId: () => string | null;
   setInspectedCharacterId: (characterId: string | null) => void;
+  getInspectedItemDefinitionId: () => string | null;
+  setInspectedItemDefinitionId: (definitionId: string | null) => void;
+  getInspectedItemInstanceId: () => string | null;
+  setInspectedItemInstanceId: (instanceId: string | null) => void;
+  getSelectedItemInstanceId: () => string | null;
+  setSelectedItemInstanceId: (instanceId: string | null) => void;
   getSelectedDoorId: () => string | null;
   setSelectedDoorId: (doorId: string | null) => void;
   getSelectedRoomId: () => string | null;
@@ -41,13 +52,19 @@ export type SceneSyncApplierContext = {
   getCurrentIdentity: () => Identity | null;
   setCurrentIdentity: (identity: Identity | null) => void;
   setNextTokenIndex: (nextIndex: number) => void;
+  setNextItemIndex: (nextIndex: number) => void;
   clearTokenNameEditing: () => void;
+  clearItemNameEditing: () => void;
+  clearItemDescriptionEditing: () => void;
   clearPreviewState: () => void;
   updateNetworkIdentity: (identity: Identity) => void;
   updateIdentityBadge: (identity: Identity) => void;
   renderIdentityList: () => void;
   renderCharacterPanel: () => void;
+  renderItemPanel: () => void;
   updateTokenInspector: () => void;
+  updateItemDefinitionInspector: () => void;
+  updateItemInstanceInspector: () => void;
   updateSelectionPanel: () => void;
   showIdentityScreen: () => void;
 };
@@ -109,7 +126,9 @@ export function createSceneSyncApplier(context: SceneSyncApplierContext) {
 
   function finalize(previousTokens: Map<string, SceneToken>, changedTokens: SceneToken[], shouldExitDeletedIdentity: boolean): void {
     syncTokenAvatarImages(context.sceneCharacters, context.tokenAvatarImages);
+    syncItemIconImages(context.sceneItemDefinitions, context.itemIconImages);
     context.setNextTokenIndex(nextAvailableTokenIndex(context.sceneCharacters));
+    context.setNextItemIndex(nextAvailableItemIndex(context.sceneItemDefinitions));
 
     const animations = buildRemoteMoveAnimations({
       nextTokens: changedTokens,
@@ -130,7 +149,10 @@ export function createSceneSyncApplier(context: SceneSyncApplierContext) {
     context.clearPreviewState();
     context.renderIdentityList();
     context.renderCharacterPanel();
+    context.renderItemPanel();
     context.updateTokenInspector();
+    context.updateItemDefinitionInspector();
+    context.updateItemInstanceInspector();
     context.updateSelectionPanel();
 
     if (shouldExitDeletedIdentity) {
@@ -144,12 +166,16 @@ export function createSceneSyncApplier(context: SceneSyncApplierContext) {
     const previousTokens = new Map(context.sceneTokens.map((token) => [token.id, token]));
     const nextTokens = snapshot.tokens.map((token) => ({ ...token, cell: { ...token.cell } }));
     const nextCharacters = snapshot.characters.map((character) => ({ ...character }));
+    const nextItemDefinitions = snapshot.itemDefinitions.map((definition) => ({ ...definition }));
+    const nextItemInstances = snapshot.itemInstances.map((instance) => ({ ...instance, cell: { ...instance.cell } }));
 
     applyPendingTokenNames(nextCharacters, context.pendingTokenNames);
     syncTokenFieldsFromCharacters(nextTokens, nextCharacters);
 
     context.sceneCharacters.splice(0, context.sceneCharacters.length, ...nextCharacters);
     context.sceneTokens.splice(0, context.sceneTokens.length, ...nextTokens);
+    context.sceneItemDefinitions.splice(0, context.sceneItemDefinitions.length, ...nextItemDefinitions);
+    context.sceneItemInstances.splice(0, context.sceneItemInstances.length, ...nextItemInstances);
     replaceSet(context.blockedVerticalEdges, snapshot.blockedVerticalEdges);
     replaceSet(context.blockedHorizontalEdges, snapshot.blockedHorizontalEdges);
     context.sceneDoors.clear();
@@ -201,6 +227,20 @@ export function createSceneSyncApplier(context: SceneSyncApplierContext) {
     }
     if (patch.tokenUpserts?.length) {
       syncTokenFieldsFromCharacters(context.sceneTokens, context.sceneCharacters);
+    }
+
+    for (const definitionId of patch.itemDefinitionDeletes ?? []) {
+      removeById(context.sceneItemDefinitions, definitionId);
+    }
+    for (const definition of patch.itemDefinitionUpserts ?? []) {
+      upsertById(context.sceneItemDefinitions, { ...definition });
+    }
+
+    for (const instanceId of patch.itemInstanceDeletes ?? []) {
+      removeById(context.sceneItemInstances, instanceId);
+    }
+    for (const instance of patch.itemInstanceUpserts ?? []) {
+      upsertById(context.sceneItemInstances, { ...instance, cell: { ...instance.cell } });
     }
 
     if (patch.blockedEdgesClear) {
@@ -378,21 +418,67 @@ function nextAvailableTokenIndex(characters: SceneCharacter[]): number {
   return maxTokenIndex + 1;
 }
 
+function syncItemIconImages(definitions: SceneItemDefinition[], itemIconImages: Map<string, TokenAvatarImage>): void {
+  const activeDefinitionIds = new Set(definitions.map((definition) => definition.id));
+  for (const definitionId of itemIconImages.keys()) {
+    const definition = definitions.find((candidate) => candidate.id === definitionId);
+    if (!activeDefinitionIds.has(definitionId) || !definition?.iconSrc) {
+      itemIconImages.delete(definitionId);
+    }
+  }
+
+  for (const definition of definitions) {
+    const iconSrc = definition.iconSrc;
+    if (!iconSrc || itemIconImages.get(definition.id)?.src === iconSrc) {
+      continue;
+    }
+
+    void loadImageSource(iconSrc, `${definition.name} 图标`)
+      .then((image) => {
+        if (definitions.some((candidate) => candidate.id === definition.id && candidate.iconSrc === iconSrc)) {
+          itemIconImages.set(definition.id, { src: iconSrc, image });
+        }
+      })
+      .catch((error: unknown) => {
+        console.error(error);
+      });
+  }
+}
+
+function nextAvailableItemIndex(definitions: SceneItemDefinition[]): number {
+  const maxItemIndex = definitions.reduce((maxIndex, definition) => {
+    const match = /^物品(\d+)$/.exec(definition.name);
+    return match ? Math.max(maxIndex, Number.parseInt(match[1], 10)) : maxIndex;
+  }, 0);
+
+  return maxItemIndex + 1;
+}
+
 function clearDeletedSelections(context: Pick<
   SceneSyncApplierContext,
   | "sceneTokens"
   | "sceneCharacters"
+  | "sceneItemDefinitions"
+  | "sceneItemInstances"
   | "sceneDoors"
   | "sceneRooms"
   | "getSelectedTokenId"
   | "setSelectedTokenId"
   | "getInspectedCharacterId"
   | "setInspectedCharacterId"
+  | "getInspectedItemDefinitionId"
+  | "setInspectedItemDefinitionId"
+  | "getInspectedItemInstanceId"
+  | "setInspectedItemInstanceId"
+  | "getSelectedItemInstanceId"
+  | "setSelectedItemInstanceId"
   | "getSelectedDoorId"
   | "setSelectedDoorId"
   | "getSelectedRoomId"
   | "setSelectedRoomId"
   | "clearTokenNameEditing"
+  | "clearItemNameEditing"
+  | "clearItemDescriptionEditing"
 >): void {
   if (context.getSelectedTokenId() && !context.sceneTokens.some((token) => token.id === context.getSelectedTokenId())) {
     context.setSelectedTokenId(null);
@@ -401,6 +487,29 @@ function clearDeletedSelections(context: Pick<
   if (context.getInspectedCharacterId() && !context.sceneCharacters.some((character) => character.id === context.getInspectedCharacterId())) {
     context.setInspectedCharacterId(null);
     context.clearTokenNameEditing();
+  }
+
+  if (
+    context.getInspectedItemDefinitionId() &&
+    !context.sceneItemDefinitions.some((definition) => definition.id === context.getInspectedItemDefinitionId())
+  ) {
+    context.setInspectedItemDefinitionId(null);
+    context.clearItemNameEditing();
+    context.clearItemDescriptionEditing();
+  }
+
+  if (
+    context.getInspectedItemInstanceId() &&
+    !context.sceneItemInstances.some((instance) => instance.id === context.getInspectedItemInstanceId())
+  ) {
+    context.setInspectedItemInstanceId(null);
+  }
+
+  if (
+    context.getSelectedItemInstanceId() &&
+    !context.sceneItemInstances.some((instance) => instance.id === context.getSelectedItemInstanceId())
+  ) {
+    context.setSelectedItemInstanceId(null);
   }
 
   if (context.getSelectedDoorId() && !context.sceneDoors.has(context.getSelectedDoorId() ?? "")) {

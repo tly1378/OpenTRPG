@@ -1,8 +1,10 @@
-import { HANDLE_RADIUS, TOKEN_RADIUS } from "../../core/constants";
+import { HANDLE_RADIUS, ITEM_RADIUS, TOKEN_RADIUS } from "../../core/constants";
 import { distance, rotate, subtract } from "../../utilities/geometry";
+import { cellCenter } from "../grid/grid";
+import { groupItemInstancesByCell } from "../items/itemStacks";
 import { getResizeHandlePositions, getRotateHandlePosition } from "../image/imageTransform";
 import { tokenRenderPosition } from "./renderer";
-import type { Interaction, MovingToken, ResizeHandle, SceneImage, SceneToken, Vector2 } from "../../core/types";
+import type { Interaction, MovingToken, ResizeHandle, SceneImage, SceneItemDefinition, SceneItemInstance, SceneToken, Vector2 } from "../../core/types";
 
 type HitTestViewport = {
   zoom: number;
@@ -34,6 +36,22 @@ export function hitTestToken(
   return [...sceneTokens]
     .reverse()
     .find((token) => distance(tokenRenderPosition(token, state), worldPoint) <= TOKEN_RADIUS + 8 / zoom) ?? null;
+}
+
+export function hitTestItemInstance(
+  itemInstances: SceneItemInstance[],
+  worldPoint: Vector2,
+  zoom: number,
+): SceneItemInstance | null {
+  const hitRadius = ITEM_RADIUS + 8 / zoom;
+
+  for (const stack of [...groupItemInstancesByCell(itemInstances)].reverse()) {
+    if (distance(cellCenter(stack.cell), worldPoint) <= hitRadius) {
+      return stack.instances[0];
+    }
+  }
+
+  return null;
 }
 
 export function hitTestResizeHandle(

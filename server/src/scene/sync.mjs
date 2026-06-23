@@ -4,6 +4,8 @@ import {
   sceneCharacters,
   sceneDoors,
   sceneImages,
+  sceneItemDefinitions,
+  sceneItemInstances,
   sceneRooms,
   sceneTokens,
 } from "../state/index.mjs";
@@ -46,6 +48,8 @@ export function sceneSnapshotPayload(serverTime = Date.now()) {
     images: sceneImages,
     characters: sceneCharacters,
     tokens: sceneTokens,
+    itemDefinitions: sceneItemDefinitions,
+    itemInstances: sceneItemInstances,
     blockedVerticalEdges: [...blockedVerticalEdges],
     blockedHorizontalEdges: [...blockedHorizontalEdges],
     doors: [...sceneDoors.values()],

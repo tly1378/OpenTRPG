@@ -956,7 +956,8 @@ button {
 }
 
 .chat-panel,
-.character-panel {
+.character-panel,
+.item-panel {
   position: fixed;
   top: 0;
   right: 0;
@@ -978,13 +979,15 @@ button {
 }
 
 .chat-panel.is-open,
-.character-panel.is-open {
+.character-panel.is-open,
+.item-panel.is-open {
   pointer-events: auto;
   transform: translateX(0);
 }
 
 .chat-panel[hidden],
-.character-panel[hidden] {
+.character-panel[hidden],
+.item-panel[hidden] {
   display: none;
 }
 
@@ -1708,4 +1711,60 @@ button {
 .selection-actions button:hover {
   border-color: rgb(104 191 255 / 70%);
   background: rgb(104 191 255 / 18%);
+}
+
+.item-description-input {
+  width: 100%;
+  min-height: 96px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 6%);
+  color: #edf4fb;
+  font: inherit;
+  line-height: 1.45;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.item-readonly-value {
+  color: #edf4fb;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.item-readonly-description {
+  margin: 0;
+  color: #cbd5e1;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.item-quantity-input {
+  width: 100%;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 6%);
+  color: #edf4fb;
+  font: inherit;
+  padding: 10px 12px;
+}
+
+.item-quantity-input:disabled {
+  opacity: 0.72;
+  cursor: default;
+}
+
+.item-instance-icon-preview {
+  width: 72px;
+  height: 72px;
+  font-size: 24px;
+}
+
+.item-definition-actions,
+.item-instance-actions {
+  margin-top: 8px;
+}
+
+.item-panel {
+  z-index: 23;
 }
