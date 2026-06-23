@@ -34,7 +34,7 @@ npm install
 打开第一个终端，启动前端：
 
 ```bash
-npm run dev
+npm run client
 ```
 
 打开第二个终端，启动同步服务器：
@@ -75,7 +75,7 @@ curl http://localhost:8787/health
 ws://localhost:8787
 ```
 
-如果同步服务器不在默认地址，可以通过环境变量覆盖。创建 `.env.local`：
+如果同步服务器不在默认地址，可以通过环境变量覆盖。在 `client/.env.local` 中创建：
 
 ```bash
 VITE_TRPG_SERVER_URL=ws://localhost:8787
@@ -107,13 +107,13 @@ curl http://localhost:8787/health
 PORT=8790 npm run server
 ```
 
-同时需要让前端连接新的端口，在 `.env.local` 中配置：
+同时需要让前端连接新的端口，在 `client/.env.local` 中配置：
 
 ```bash
 VITE_TRPG_SERVER_URL=ws://localhost:8790
 ```
 
-修改 `.env.local` 后需要重启 `npm run dev`。
+修改 `client/.env.local` 后需要重启 `npm run client`。
 
 ## 构建验证
 
@@ -125,42 +125,39 @@ npm run build
 
 ## 项目结构
 
-主要代码在 `src/` 下。`main.ts` 负责应用启动和高层编排；基础类型、工具函数、业务模块、控制器和服务层分别放在子目录中。
+仓库按客户端与服务端拆分。前端在 `client/` 下，由 Vite 提供开发与构建；WebSocket 同步服务在 `server/` 下独立运行。
 
 ```text
-src/
-  main.ts              应用入口：依赖装配、状态编排和启动流程
-  styles.css           页面布局和 UI 样式
+client/
+  index.html           Vite 入口页面
+  vite.config.ts       前端构建配置
+  tsconfig.json        客户端 TypeScript 配置
+  public/              静态资源（构建时原样复制）
+  src/
+    main.ts            应用入口：依赖装配、状态编排和启动流程
+    styles.css         页面布局和 UI 样式
 
-  core/                跨模块基础定义
-    types.ts           共享类型：坐标、图片、角色、身份、交互状态
-    constants.ts       画布、网格、token、手柄等常量
-    appState.ts        应用运行状态初始化
+    core/              跨模块基础定义
+      types.ts         共享类型：坐标、图片、角色、身份、交互状态
+      constants.ts     画布、网格、token、手柄等常量
+      appState.ts      应用运行状态初始化
 
-  utilities/           通用工具函数
-    dom.ts             DOM 查询和 Canvas context 获取
-    geometry.ts        向量计算、旋转、距离、缓动函数
+    utilities/         通用工具函数
+      dom.ts           DOM 查询和 Canvas context 获取
+      geometry.ts      向量计算、旋转、距离、缓动函数
 
-  modules/             按功能域拆分的业务逻辑
-    canvas/            Canvas 渲染、命中检测、视口和指针交互
-    grid/              网格、寻路、墙/门/房间辅助逻辑
-    image/             图片导入、缩放、旋转和手柄计算
-    identity/          身份选择和模式控件 UI
-    scene/             场景实体创建、层级和尺寸操作
+    modules/           按功能域拆分的业务逻辑
+      canvas/          Canvas 渲染、命中检测、视口和指针交互
+      grid/            网格、寻路、墙/门/房间辅助逻辑
+      image/           图片导入、缩放、旋转和手柄计算
+      identity/        身份选择和模式控件 UI
+      scene/           场景实体创建、层级和尺寸操作
 
-  controllers/         UI/交互控制器和页面接线
-    avatarEditorController.ts
-    diceController.ts
-    panels.ts
-    eventHandlers.ts
-    domRefs.ts
-
-  services/            外部服务和同步适配
-    networkClient.ts   WebSocket 客户端、重连、延迟和在线列表状态
-    networkSync.ts     网络回调与 UI/场景状态的适配
+    controllers/       UI/交互控制器和页面接线
+    services/          WebSocket 客户端与场景同步适配
 
 server/
-  index.mjs          WebSocket 同步服务器和健康检查接口
+  index.mjs            WebSocket 同步服务器和健康检查接口
 ```
 
 ## 模式与权限
