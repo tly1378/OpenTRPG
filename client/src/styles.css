@@ -142,6 +142,11 @@ button {
   pointer-events: auto;
   user-select: none;
   backdrop-filter: blur(12px);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 80ms ease;
 }
 
 .tool-button .tool-icon {
@@ -176,10 +181,29 @@ button {
   white-space: nowrap;
 }
 
-.tool-button:hover,
 .tool-button.is-active {
-  border-color: rgb(104 191 255 / 70%);
-  background: rgb(22 45 66 / 92%);
+  border-color: rgb(104 191 255 / 48%);
+  background: rgb(22 45 66 / 84%);
+  box-shadow:
+    0 10px 30px rgb(0 0 0 / 28%),
+    inset 0 0 0 1px rgb(104 191 255 / 16%);
+}
+
+.tool-button:hover:not(:disabled):not(.is-disabled) {
+  border-color: rgb(104 191 255 / 72%);
+  background: rgb(28 54 76 / 92%);
+}
+
+.tool-button.is-active:hover:not(:disabled):not(.is-disabled) {
+  border-color: rgb(104 191 255 / 80%);
+  background: rgb(30 58 82 / 94%);
+}
+
+.tool-button:active:not(:disabled):not(.is-disabled) {
+  border-color: rgb(104 191 255 / 88%);
+  background: rgb(14 28 42 / 96%);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 34%);
+  transform: scale(0.97);
 }
 
 .tool-button:hover::after,
@@ -201,10 +225,29 @@ button {
   color: #fecaca;
 }
 
-.tool-button.destructive-button:hover,
 .tool-button.destructive-button.is-active {
-  border-color: rgb(248 113 113 / 72%);
-  background: rgb(127 29 29 / 72%);
+  border-color: rgb(248 113 113 / 50%);
+  background: rgb(127 29 29 / 68%);
+  box-shadow:
+    0 10px 30px rgb(0 0 0 / 28%),
+    inset 0 0 0 1px rgb(248 113 113 / 18%);
+}
+
+.tool-button.destructive-button:hover:not(:disabled):not(.is-disabled) {
+  border-color: rgb(248 113 113 / 74%);
+  background: rgb(153 27 27 / 78%);
+}
+
+.tool-button.destructive-button.is-active:hover:not(:disabled):not(.is-disabled) {
+  border-color: rgb(248 113 113 / 82%);
+  background: rgb(165 28 28 / 82%);
+}
+
+.tool-button.destructive-button:active:not(:disabled):not(.is-disabled) {
+  border-color: rgb(248 113 113 / 90%);
+  background: rgb(95 20 20 / 88%);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 34%);
+  transform: scale(0.97);
 }
 
 .right-toolbar {
