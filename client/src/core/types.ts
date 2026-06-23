@@ -91,6 +91,24 @@ export type SceneItemInstance = {
   quantity: number;
 };
 
+export type SceneBackpackItem = {
+  id: string;
+  characterId: string;
+  definitionId: string;
+  quantity: number;
+};
+
+export type WarehouseItemEntry = {
+  id: string;
+  definitionId: string;
+  quantity: number;
+  source: "backpack" | "ground";
+};
+
+export type WarehouseOverlayMode = "single" | "transfer";
+
+export type TokenInspectorTab = "profile" | "backpack";
+
 export type SceneDoor = {
   type: WallEdgeType;
   x: number;

@@ -8,6 +8,7 @@ import type {
   SceneImageSnapshot,
   SceneItemDefinition,
   SceneItemInstance,
+  SceneBackpackItem,
   SceneRoom,
   SceneToken,
   WallEdgeType,
@@ -37,6 +38,7 @@ export type SceneSnapshot = {
   tokens: SceneToken[];
   itemDefinitions: SceneItemDefinition[];
   itemInstances: SceneItemInstance[];
+  backpackItems: SceneBackpackItem[];
   blockedVerticalEdges: string[];
   blockedHorizontalEdges: string[];
   doors: SceneDoor[];
@@ -65,6 +67,8 @@ export type ScenePatch = {
   itemDefinitionDeletes?: string[];
   itemInstanceUpserts?: SceneItemInstance[];
   itemInstanceDeletes?: string[];
+  backpackItemUpserts?: SceneBackpackItem[];
+  backpackItemDeletes?: string[];
   blockedVerticalEdges?: BlockedEdgeChange[];
   blockedHorizontalEdges?: BlockedEdgeChange[];
   blockedEdgesClear?: boolean;
@@ -96,6 +100,7 @@ type NetworkMessage =
       tokens: SceneToken[];
       itemDefinitions?: SceneItemDefinition[];
       itemInstances?: SceneItemInstance[];
+      backpackItems?: SceneBackpackItem[];
       blockedVerticalEdges?: string[];
       blockedHorizontalEdges?: string[];
       doors?: SceneDoor[];
@@ -216,6 +221,24 @@ export class NetworkClient {
     this.send({
       type: "scene:item-instance-delete",
       instanceId,
+    });
+  }
+
+  sendWarehouseTransfer(fromWarehouse: string, toWarehouse: string, itemId: string): void {
+    this.send({
+      type: "scene:warehouse-transfer",
+      fromWarehouse,
+      toWarehouse,
+      itemId,
+    });
+  }
+
+  sendWarehouseSplit(warehouseId: string, itemId: string, splitQuantity: number): void {
+    this.send({
+      type: "scene:warehouse-split",
+      warehouseId,
+      itemId,
+      splitQuantity,
     });
   }
 
@@ -412,6 +435,7 @@ export class NetworkClient {
         tokens: message.tokens,
         itemDefinitions: message.itemDefinitions ?? [],
         itemInstances: message.itemInstances ?? [],
+        backpackItems: message.backpackItems ?? [],
         blockedVerticalEdges: message.blockedVerticalEdges ?? [],
         blockedHorizontalEdges: message.blockedHorizontalEdges ?? [],
         doors: message.doors ?? [],

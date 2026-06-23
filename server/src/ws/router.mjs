@@ -8,6 +8,7 @@ import {
   handleSceneItemInstanceDelete,
   handleSceneItemInstanceUpdate,
 } from "../handlers/scene/itemInstances.mjs";
+import { handleSceneWarehouseSplit, handleSceneWarehouseTransfer } from "../handlers/scene/warehouse.mjs";
 import { handleSceneImageAdd, handleSceneImageDelete, handleSceneImagesUpdate, handleSceneImageUpdate } from "../handlers/scene/images.mjs";
 import {
   handleBlockedEdgeSet,
@@ -37,6 +38,8 @@ const messageHandlers = {
   "scene:item-instance-add": handleSceneItemInstanceAdd,
   "scene:item-instance-update": handleSceneItemInstanceUpdate,
   "scene:item-instance-delete": handleSceneItemInstanceDelete,
+  "scene:warehouse-transfer": handleSceneWarehouseTransfer,
+  "scene:warehouse-split": handleSceneWarehouseSplit,
   "scene:token-delete": handleSceneTokenDelete,
   "scene:image-add": handleSceneImageAdd,
   "scene:image-update": handleSceneImageUpdate,

@@ -1,3 +1,4 @@
+import { normalizeSceneBackpackItem } from "../normalization/backpack.mjs";
 import {
   blockedHorizontalEdges,
   blockedVerticalEdges,
@@ -6,6 +7,7 @@ import {
   sceneImages,
   sceneItemDefinitions,
   sceneItemInstances,
+  sceneBackpackItems,
   sceneRooms,
   sceneTokens,
 } from "../state/index.mjs";
@@ -50,6 +52,9 @@ export function sceneSnapshotPayload(serverTime = Date.now()) {
     tokens: sceneTokens,
     itemDefinitions: sceneItemDefinitions,
     itemInstances: sceneItemInstances,
+    backpackItems: sceneBackpackItems
+      .map((item) => normalizeSceneBackpackItem(item))
+      .filter(Boolean),
     blockedVerticalEdges: [...blockedVerticalEdges],
     blockedHorizontalEdges: [...blockedHorizontalEdges],
     doors: [...sceneDoors.values()],

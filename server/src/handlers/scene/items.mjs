@@ -1,6 +1,6 @@
 import { broadcastScenePatch } from "../../scene/broadcast.mjs";
 import { normalizeSceneItemDefinition } from "../../normalization/items.mjs";
-import { sceneItemDefinitions, sceneItemInstances } from "../../state/index.mjs";
+import { sceneBackpackItems, sceneItemDefinitions, sceneItemInstances } from "../../state/index.mjs";
 
 export function handleSceneItemDefinitionAdd(client, message) {
   if (client.identity.type !== "admin") {
@@ -58,11 +58,22 @@ export function handleSceneItemDefinitionDelete(client, message) {
       sceneItemInstances.splice(index, 1);
     }
   }
+  const deletedBackpackItemIds = sceneBackpackItems
+    .filter((item) => item.definitionId === definitionId)
+    .map((item) => item.id);
+  for (let index = sceneBackpackItems.length - 1; index >= 0; index -= 1) {
+    if (sceneBackpackItems[index].definitionId === definitionId) {
+      sceneBackpackItems.splice(index, 1);
+    }
+  }
 
   client.lastSeenAt = Date.now();
   const patch = { itemDefinitionDeletes: [definitionId] };
   if (deletedInstanceIds.length > 0) {
     patch.itemInstanceDeletes = deletedInstanceIds;
+  }
+  if (deletedBackpackItemIds.length > 0) {
+    patch.backpackItemDeletes = deletedBackpackItemIds;
   }
 
   broadcastScenePatch(patch);

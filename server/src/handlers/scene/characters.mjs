@@ -3,7 +3,7 @@ import { normalizeTokenAvatarFields } from "../../normalization/images.mjs";
 import { normalizeSceneCharacter, normalizeTokenName } from "../../normalization/tokens.mjs";
 import { broadcastScenePatch } from "../../scene/broadcast.mjs";
 import { syncTokenFromCharacter } from "../../scene/sync.mjs";
-import { sceneCharacters, sceneTokens } from "../../state/index.mjs";
+import { sceneBackpackItems, sceneCharacters, sceneTokens } from "../../state/index.mjs";
 
 export function handleSceneCharacterAdd(client, message) {
   if (client.identity.type !== "admin") {
@@ -67,11 +67,22 @@ export function handleSceneCharacterDelete(client, message) {
   if (tokenIndex !== -1) {
     sceneTokens.splice(tokenIndex, 1);
   }
+  const deletedBackpackItemIds = sceneBackpackItems
+    .filter((item) => item.characterId === characterId)
+    .map((item) => item.id);
+  for (let index = sceneBackpackItems.length - 1; index >= 0; index -= 1) {
+    if (sceneBackpackItems[index].characterId === characterId) {
+      sceneBackpackItems.splice(index, 1);
+    }
+  }
   client.lastSeenAt = Date.now();
 
   const patch = { characterDeletes: [characterId] };
   if (tokenIndex !== -1) {
     patch.tokenDeletes = [characterId];
+  }
+  if (deletedBackpackItemIds.length > 0) {
+    patch.backpackItemDeletes = deletedBackpackItemIds;
   }
 
   broadcastScenePatch(patch);

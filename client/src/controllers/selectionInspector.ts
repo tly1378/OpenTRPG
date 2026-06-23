@@ -1,5 +1,8 @@
-import type { SceneCharacter, SceneDoor, SceneImage, SceneItemDefinition, SceneItemInstance, SceneRoom, SceneToken } from "../core/types";
+import type { Cell, SceneCharacter, SceneDoor, SceneImage, SceneItemDefinition, SceneItemInstance, SceneBackpackItem, SceneRoom, SceneToken, TokenInspectorTab, WarehouseItemEntry, WarehouseOverlayMode } from "../core/types";
+import { renderWarehouseList } from "../modules/warehouses/warehouseUi";
+import { backpackWarehouseId, getWarehouseLabel, groundWarehouseId, groundWarehouseLabel } from "../modules/warehouses/warehouses";
 import { buildItemDisplayLabel, buildItemStackDescription, getItemStackForInstance, type ItemStack } from "../modules/items/itemStacks";
+import type { TokenAvatarImage } from "../core/appState";
 
 export function renderSelectionPanel(options: {
   elements: {
@@ -87,9 +90,23 @@ export function renderTokenInspector(options: {
     tokenPanelHelp: HTMLParagraphElement;
     tokenNpcTypeControls: HTMLDivElement;
     tokenNpcTypeInput: HTMLInputElement;
+    tokenInspectorTabProfile: HTMLButtonElement;
+    tokenInspectorTabBackpack: HTMLButtonElement;
+    tokenProfilePanel: HTMLDivElement;
+    tokenBackpackPanel: HTMLDivElement;
+    tokenBackpackTitle: HTMLDivElement;
+    tokenBackpackList: HTMLDivElement;
+    tokenBackpackHelp: HTMLParagraphElement;
   };
   character: SceneCharacter | null;
   tokenInstance: SceneToken | null;
+  activeTab: TokenInspectorTab;
+  backpackItems: WarehouseItemEntry[];
+  definitionsById: Map<string, SceneItemDefinition>;
+  iconImages: Map<string, TokenAvatarImage>;
+  canTransferBackpack: boolean;
+  onWarehouseTransfer: (fromWarehouseId: string, toWarehouseId: string, itemId: string) => void;
+  onItemInspect: (item: WarehouseItemEntry) => void;
   canInspectToken: boolean;
   canControlToken: boolean;
   isAdmin: boolean;
@@ -105,6 +122,15 @@ export function renderTokenInspector(options: {
   }
 
   elements.tokenInspectorOverlay.hidden = false;
+
+  const isProfileTab = options.activeTab === "profile";
+  elements.tokenInspectorTabProfile.classList.toggle("is-active", isProfileTab);
+  elements.tokenInspectorTabProfile.setAttribute("aria-selected", String(isProfileTab));
+  elements.tokenInspectorTabBackpack.classList.toggle("is-active", !isProfileTab);
+  elements.tokenInspectorTabBackpack.setAttribute("aria-selected", String(!isProfileTab));
+  elements.tokenProfilePanel.hidden = !isProfileTab;
+  elements.tokenBackpackPanel.hidden = isProfileTab;
+
   elements.tokenNameDisplay.hidden = false;
   elements.tokenNameValue.textContent = character.name;
   elements.tokenNameValue.hidden = options.isEditingTokenName;
@@ -123,16 +149,34 @@ export function renderTokenInspector(options: {
   elements.tokenNpcTypeInput.disabled = !options.isAdmin;
 
   if (character.isNpc && !options.canControlToken) {
+    elements.tokenPanelHelp.hidden = false;
     elements.tokenPanelHelp.textContent = "NPC 只能由主持人操控。";
   } else if (options.canControlToken) {
-    elements.tokenPanelHelp.textContent = "修改后会同步到所有客户端。";
+    elements.tokenPanelHelp.hidden = true;
+    elements.tokenPanelHelp.textContent = "";
   } else {
+    elements.tokenPanelHelp.hidden = false;
     elements.tokenPanelHelp.textContent = "只有主持人或该角色玩家可以修改姓名。";
   }
 
   if (document.activeElement !== elements.tokenNameInput || !options.isEditingTokenName) {
     elements.tokenNameInput.value = character.name;
   }
+
+  elements.tokenBackpackTitle.textContent = getWarehouseLabel(backpackWarehouseId(character.id), character.name);
+  renderWarehouseList({
+    container: elements.tokenBackpackList,
+    warehouseId: backpackWarehouseId(character.id),
+    items: options.backpackItems,
+    definitionsById: options.definitionsById,
+    iconImages: options.iconImages,
+    draggable: options.canTransferBackpack,
+    droppable: options.canTransferBackpack,
+    onTransfer: options.onWarehouseTransfer,
+    onItemInspect: options.onItemInspect,
+  });
+
+  elements.tokenBackpackHelp.textContent = "双击条目可查看详情。";
 }
 
 export function renderItemDefinitionInspector(options: {
@@ -196,41 +240,81 @@ export function renderItemInstanceInspector(options: {
     itemInstanceNameValue: HTMLSpanElement;
     itemInstanceDescriptionValue: HTMLParagraphElement;
     itemInstanceIconPreview: HTMLDivElement;
+    itemInstanceQuantityValue: HTMLSpanElement;
+    itemInstanceQuantityEdit: HTMLLabelElement;
     itemQuantityInput: HTMLInputElement;
     deleteItemInstanceButton: HTMLButtonElement;
-    itemInstancePanelHelp: HTMLParagraphElement;
+    splitItemInstanceButton: HTMLButtonElement;
+    takeItemInstanceButton: HTMLButtonElement;
+    discardItemInstanceButton: HTMLButtonElement;
+    itemSplitPopover: HTMLDivElement;
+    itemSplitSlider: HTMLInputElement;
+    itemSplitValue: HTMLOutputElement;
+    cancelItemSplitButton: HTMLButtonElement;
+    confirmItemSplitButton: HTMLButtonElement;
   };
   definition: SceneItemDefinition | null;
   instance: SceneItemInstance | null;
+  backpackItem: SceneBackpackItem | null;
   stack: ItemStack | null;
+  singleItemFocus: boolean;
   definitionsById: Map<string, SceneItemDefinition>;
   iconImages: Map<string, { src: string; image: HTMLImageElement }>;
   isAdmin: boolean;
   canInspect: boolean;
+  canTakeItem: boolean;
+  canSplitItem: boolean;
+  canDiscardBackpackItem: boolean;
+  itemSplitPopoverOpen: boolean;
 }): void {
-  const { elements, definition, instance, stack } = options;
+  const { elements, definition, instance, backpackItem, stack } = options;
 
-  if (!definition || !instance || !stack || !options.canInspect) {
+  const hasGroundItem = Boolean(definition && instance && stack);
+  const hasBackpackItem = Boolean(definition && backpackItem);
+
+  if ((!hasGroundItem && !hasBackpackItem) || !options.canInspect) {
     elements.itemInstanceInspectorOverlay.hidden = true;
     return;
   }
 
-  const isMultiItemStack = stack.instances.length > 1;
-  const displayLabel = buildItemDisplayLabel(stack, options.definitionsById);
+  const isMultiItemStack = Boolean(stack && stack.instances.length > 1 && !options.singleItemFocus);
+  const useSimpleItemPresentation = hasBackpackItem || options.singleItemFocus || !isMultiItemStack;
+  const displayLabel = useSimpleItemPresentation
+    ? definition!.name
+    : buildItemDisplayLabel(stack!, options.definitionsById);
 
   elements.itemInstanceInspectorOverlay.hidden = false;
   elements.itemInstanceNameValue.textContent = displayLabel;
-  elements.itemInstanceDescriptionValue.textContent = buildItemStackDescription(stack, options.definitionsById);
-  elements.itemQuantityInput.value = String(instance.quantity);
-  elements.itemQuantityInput.disabled = !options.isAdmin || isMultiItemStack;
+  const descriptionText = useSimpleItemPresentation
+    ? definition!.description?.trim() || "暂无描述"
+    : buildItemStackDescription(stack!, options.definitionsById);
+  elements.itemInstanceDescriptionValue.textContent = descriptionText;
+  elements.itemInstanceDescriptionValue.classList.toggle(
+    "is-placeholder",
+    useSimpleItemPresentation ? !definition!.description?.trim() : false,
+  );
+  const itemQuantity = hasBackpackItem ? backpackItem!.quantity : instance!.quantity;
+  const canEditQuantity = options.isAdmin && !hasBackpackItem && !isMultiItemStack;
+  elements.itemInstanceQuantityValue.textContent = `数量：${itemQuantity}`;
+  elements.itemInstanceQuantityValue.hidden = canEditQuantity;
+  elements.itemInstanceQuantityEdit.hidden = !canEditQuantity;
+  elements.itemQuantityInput.value = String(itemQuantity);
+  elements.itemQuantityInput.disabled = !canEditQuantity;
+  elements.deleteItemInstanceButton.hidden = hasBackpackItem || !options.isAdmin;
   elements.deleteItemInstanceButton.disabled = !options.isAdmin;
-  elements.itemInstancePanelHelp.textContent = isMultiItemStack
-    ? options.isAdmin
-      ? "该格子里有多个物品叠放。双击后可删除当前选中的单个物品。"
-      : "该格子里有多个物品叠放。"
-    : options.isAdmin
-      ? "场景中的物品实体只能修改数量或删除。"
-      : "你只能查看场景物品的信息。";
+  const canSplitStack = itemQuantity > 1 && !isMultiItemStack && options.canSplitItem;
+  elements.splitItemInstanceButton.hidden = !canSplitStack;
+  elements.splitItemInstanceButton.disabled = !canSplitStack;
+  elements.takeItemInstanceButton.hidden = hasBackpackItem || isMultiItemStack || !options.canTakeItem;
+  elements.takeItemInstanceButton.disabled = !options.canTakeItem;
+  elements.discardItemInstanceButton.hidden = !hasBackpackItem || !options.canDiscardBackpackItem;
+  elements.discardItemInstanceButton.disabled = !options.canDiscardBackpackItem;
+  elements.itemSplitPopover.hidden = !options.itemSplitPopoverOpen || !canSplitStack;
+
+  if (!definition) {
+    elements.itemInstanceInspectorOverlay.hidden = true;
+    return;
+  }
 
   const iconImage = options.iconImages.get(definition.id);
   elements.itemInstanceIconPreview.replaceChildren();
@@ -256,5 +340,107 @@ export function renderItemInstanceInspector(options: {
     elements.itemInstanceIconPreview.append(image);
   } else {
     elements.itemInstanceIconPreview.textContent = definition.name.trim().slice(0, 1) || "物";
+  }
+}
+
+export function renderWarehouseOverlay(options: {
+  elements: {
+    warehouseOverlay: HTMLElement;
+    warehouseOverlayEyebrow: HTMLParagraphElement;
+    warehouseOverlayTitle: HTMLHeadingElement;
+    warehouseSingleView: HTMLDivElement;
+    warehouseSingleList: HTMLDivElement;
+    warehouseTransferView: HTMLDivElement;
+    warehouseTransferGroundTitle: HTMLDivElement;
+    warehouseTransferGroundList: HTMLDivElement;
+    warehouseTransferBackpackTitle: HTMLDivElement;
+    warehouseTransferBackpackList: HTMLDivElement;
+    warehouseOverlayHelp: HTMLParagraphElement;
+  };
+  mode: WarehouseOverlayMode | null;
+  cell: Cell | null;
+  groundItems: WarehouseItemEntry[];
+  backpackItems: WarehouseItemEntry[];
+  backpackCharacterId: string | null;
+  backpackCharacterName: string | null;
+  definitionsById: Map<string, SceneItemDefinition>;
+  iconImages: Map<string, TokenAvatarImage>;
+  canTransfer: boolean;
+  onWarehouseTransfer: (fromWarehouseId: string, toWarehouseId: string, itemId: string) => void;
+  onItemInspect: (item: WarehouseItemEntry) => void;
+}): void {
+  const { elements, cell, mode } = options;
+
+  if (!cell || !mode) {
+    elements.warehouseOverlay.hidden = true;
+    return;
+  }
+
+  const groundLabel = groundWarehouseLabel(cell);
+  const groundWarehouse = groundWarehouseId(cell);
+  const backpackWarehouse = options.backpackCharacterId ? backpackWarehouseId(options.backpackCharacterId) : null;
+  const isSingle = mode === "single";
+
+  elements.warehouseOverlay.hidden = false;
+  elements.warehouseSingleView.hidden = !isSingle;
+  elements.warehouseTransferView.hidden = isSingle;
+
+  if (isSingle) {
+    elements.warehouseOverlayEyebrow.textContent = "仓库";
+    elements.warehouseOverlayTitle.textContent = groundLabel;
+
+    renderWarehouseList({
+      container: elements.warehouseSingleList,
+      warehouseId: groundWarehouse,
+      items: options.groundItems,
+      definitionsById: options.definitionsById,
+      iconImages: options.iconImages,
+      draggable: false,
+      droppable: false,
+      onTransfer: options.onWarehouseTransfer,
+      onItemInspect: options.onItemInspect,
+    });
+
+    elements.warehouseOverlayHelp.textContent = "双击物品条目可查看详情。";
+    return;
+  }
+
+  elements.warehouseOverlayEyebrow.textContent = "物品交换";
+  elements.warehouseOverlayTitle.textContent = "物品交换";
+  elements.warehouseTransferGroundTitle.textContent = groundLabel;
+  elements.warehouseTransferBackpackTitle.textContent = options.backpackCharacterId
+    ? getWarehouseLabel(backpackWarehouseId(options.backpackCharacterId), options.backpackCharacterName)
+    : "角色背包";
+
+  renderWarehouseList({
+    container: elements.warehouseTransferGroundList,
+    warehouseId: groundWarehouse,
+    items: options.groundItems,
+    definitionsById: options.definitionsById,
+    iconImages: options.iconImages,
+    draggable: options.canTransfer,
+    droppable: options.canTransfer,
+    onTransfer: options.onWarehouseTransfer,
+    onItemInspect: options.onItemInspect,
+  });
+
+  renderWarehouseList({
+    container: elements.warehouseTransferBackpackList,
+    warehouseId: backpackWarehouse ?? "backpack:unknown",
+    items: options.backpackItems,
+    definitionsById: options.definitionsById,
+    iconImages: options.iconImages,
+    draggable: options.canTransfer && Boolean(backpackWarehouse),
+    droppable: options.canTransfer && Boolean(backpackWarehouse),
+    onTransfer: options.onWarehouseTransfer,
+    onItemInspect: options.onItemInspect,
+  });
+
+  if (!options.backpackCharacterId) {
+    elements.warehouseOverlayHelp.textContent = "以玩家身份登录后才能使用角色背包。";
+  } else if (options.canTransfer) {
+    elements.warehouseOverlayHelp.textContent = "拖动物品可在两个仓库之间转移；双击条目可查看详情。";
+  } else {
+    elements.warehouseOverlayHelp.textContent = "你没有权限转移这些物品。";
   }
 }

@@ -1,5 +1,6 @@
 import type { Cell, SceneItemDefinition, SceneItemInstance } from "../core/types";
 import { createSceneItemDefinition, createSceneItemInstance } from "../modules/scene/sceneActions";
+import { findGroundItemStack } from "../modules/warehouses/warehouses";
 
 export class ItemController {
   constructor(
@@ -64,6 +65,15 @@ export class ItemController {
 
     const definition = this.state.sceneItemDefinitions.find((candidate) => candidate.id === definitionId);
     if (!definition) {
+      return;
+    }
+
+    const existingStack = findGroundItemStack(this.state.sceneItemInstances, cell, definitionId);
+    if (existingStack) {
+      existingStack.quantity = Math.min(9999, existingStack.quantity + 1);
+      this.state.setSelectedItemInstanceId(existingStack.id);
+      this.actions.renderItemPanel();
+      this.network.sendItemInstanceUpdated(existingStack);
       return;
     }
 

@@ -62,6 +62,17 @@ export function installControlEventHandlers(options: {
     itemInstanceSelectionForm: HTMLFormElement;
     itemQuantityInput: HTMLInputElement;
     deleteItemInstanceButton: HTMLButtonElement;
+    splitItemInstanceButton: HTMLButtonElement;
+    takeItemInstanceButton: HTMLButtonElement;
+    discardItemInstanceButton: HTMLButtonElement;
+    itemSplitPopover: HTMLDivElement;
+    itemSplitSlider: HTMLInputElement;
+    cancelItemSplitButton: HTMLButtonElement;
+    confirmItemSplitButton: HTMLButtonElement;
+    tokenInspectorTabProfile: HTMLButtonElement;
+    tokenInspectorTabBackpack: HTMLButtonElement;
+    warehouseOverlay: HTMLElement;
+    closeWarehouseOverlayButton: HTMLButtonElement;
   };
   state: {
     isLoggedIn: () => boolean;
@@ -125,6 +136,14 @@ export function installControlEventHandlers(options: {
     updateItemInstanceQuantity: (quantity: number) => void;
     stopItemQuantityEditing: () => void;
     deleteItemInstance: (instanceId: string) => void;
+    takeInspectedItemToBackpack: () => void;
+    discardInspectedBackpackItem: () => void;
+    openItemSplitPopover: () => void;
+    closeItemSplitPopover: () => void;
+    updateItemSplitSlider: (value: number) => void;
+    confirmItemSplit: () => void;
+    setTokenInspectorTab: (tab: "profile" | "backpack") => void;
+    closeWarehouseOverlay: () => void;
     updateCharacterIsNpc: (isNpc: boolean) => void;
     closeTokenInspector: () => void;
     deleteToken: (tokenId: string) => void;
@@ -347,6 +366,36 @@ export function installControlEventHandlers(options: {
     const instance = state.inspectedItemInstance();
     if (instance && state.isAdmin()) {
       actions.deleteItemInstance(instance.id);
+    }
+  });
+  elements.takeItemInstanceButton.addEventListener("click", () => {
+    actions.takeInspectedItemToBackpack();
+  });
+  elements.discardItemInstanceButton.addEventListener("click", () => {
+    actions.discardInspectedBackpackItem();
+  });
+  elements.splitItemInstanceButton.addEventListener("click", () => {
+    actions.openItemSplitPopover();
+  });
+  elements.cancelItemSplitButton.addEventListener("click", () => {
+    actions.closeItemSplitPopover();
+  });
+  elements.confirmItemSplitButton.addEventListener("click", () => {
+    actions.confirmItemSplit();
+  });
+  elements.itemSplitSlider.addEventListener("input", () => {
+    actions.updateItemSplitSlider(Number.parseInt(elements.itemSplitSlider.value, 10));
+  });
+  elements.tokenInspectorTabProfile.addEventListener("click", () => {
+    actions.setTokenInspectorTab("profile");
+  });
+  elements.tokenInspectorTabBackpack.addEventListener("click", () => {
+    actions.setTokenInspectorTab("backpack");
+  });
+  elements.closeWarehouseOverlayButton.addEventListener("click", actions.closeWarehouseOverlay);
+  elements.warehouseOverlay.addEventListener("click", (event) => {
+    if (event.target === elements.warehouseOverlay) {
+      actions.closeWarehouseOverlay();
     }
   });
   elements.closeTokenInspectorButton.addEventListener("click", actions.closeTokenInspector);

@@ -1,5 +1,6 @@
 import { broadcastScenePatch } from "../../scene/broadcast.mjs";
 import { normalizeSceneItemInstance } from "../../normalization/items.mjs";
+import { addGroundItemQuantity, findGroundItemStack } from "../../scene/groundItems.mjs";
 import { sceneItemDefinitions, sceneItemInstances } from "../../state/index.mjs";
 
 export function handleSceneItemInstanceAdd(client, message) {
@@ -13,6 +14,14 @@ export function handleSceneItemInstanceAdd(client, message) {
     !sceneItemDefinitions.some((definition) => definition.id === instance.definitionId) ||
     sceneItemInstances.some((candidate) => candidate.id === instance.id)
   ) {
+    return;
+  }
+
+  const existingStack = findGroundItemStack(sceneItemInstances, instance.cell, instance.definitionId);
+  if (existingStack) {
+    addGroundItemQuantity(existingStack, instance.quantity);
+    client.lastSeenAt = Date.now();
+    broadcastScenePatch({ itemInstanceUpserts: [{ ...existingStack, cell: { ...existingStack.cell } }] });
     return;
   }
 

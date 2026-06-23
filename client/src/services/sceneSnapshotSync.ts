@@ -8,6 +8,7 @@ import type {
   SceneImageSnapshot,
   SceneItemDefinition,
   SceneItemInstance,
+  SceneBackpackItem,
   SceneRoom,
   SceneToken,
 } from "../core/types";
@@ -24,6 +25,7 @@ export type SceneSyncApplierContext = {
   sceneTokens: SceneToken[];
   sceneItemDefinitions: SceneItemDefinition[];
   sceneItemInstances: SceneItemInstance[];
+  sceneBackpackItems: SceneBackpackItem[];
   tokenAvatarImages: Map<string, TokenAvatarImage>;
   itemIconImages: Map<string, TokenAvatarImage>;
   blockedVerticalEdges: Set<string>;
@@ -43,6 +45,8 @@ export type SceneSyncApplierContext = {
   setInspectedItemDefinitionId: (definitionId: string | null) => void;
   getInspectedItemInstanceId: () => string | null;
   setInspectedItemInstanceId: (instanceId: string | null) => void;
+  getInspectedBackpackItemId: () => string | null;
+  setInspectedBackpackItemId: (backpackItemId: string | null) => void;
   getSelectedItemInstanceId: () => string | null;
   setSelectedItemInstanceId: (instanceId: string | null) => void;
   getSelectedDoorId: () => string | null;
@@ -65,6 +69,7 @@ export type SceneSyncApplierContext = {
   updateTokenInspector: () => void;
   updateItemDefinitionInspector: () => void;
   updateItemInstanceInspector: () => void;
+  updateWarehouseOverlay: () => void;
   updateSelectionPanel: () => void;
   showIdentityScreen: () => void;
 };
@@ -153,6 +158,7 @@ export function createSceneSyncApplier(context: SceneSyncApplierContext) {
     context.updateTokenInspector();
     context.updateItemDefinitionInspector();
     context.updateItemInstanceInspector();
+    context.updateWarehouseOverlay();
     context.updateSelectionPanel();
 
     if (shouldExitDeletedIdentity) {
@@ -168,6 +174,7 @@ export function createSceneSyncApplier(context: SceneSyncApplierContext) {
     const nextCharacters = snapshot.characters.map((character) => ({ ...character }));
     const nextItemDefinitions = snapshot.itemDefinitions.map((definition) => ({ ...definition }));
     const nextItemInstances = snapshot.itemInstances.map((instance) => ({ ...instance, cell: { ...instance.cell } }));
+    const nextBackpackItems = snapshot.backpackItems.map((item) => ({ ...item }));
 
     applyPendingTokenNames(nextCharacters, context.pendingTokenNames);
     syncTokenFieldsFromCharacters(nextTokens, nextCharacters);
@@ -176,6 +183,7 @@ export function createSceneSyncApplier(context: SceneSyncApplierContext) {
     context.sceneTokens.splice(0, context.sceneTokens.length, ...nextTokens);
     context.sceneItemDefinitions.splice(0, context.sceneItemDefinitions.length, ...nextItemDefinitions);
     context.sceneItemInstances.splice(0, context.sceneItemInstances.length, ...nextItemInstances);
+    context.sceneBackpackItems.splice(0, context.sceneBackpackItems.length, ...nextBackpackItems);
     replaceSet(context.blockedVerticalEdges, snapshot.blockedVerticalEdges);
     replaceSet(context.blockedHorizontalEdges, snapshot.blockedHorizontalEdges);
     context.sceneDoors.clear();
@@ -241,6 +249,13 @@ export function createSceneSyncApplier(context: SceneSyncApplierContext) {
     }
     for (const instance of patch.itemInstanceUpserts ?? []) {
       upsertById(context.sceneItemInstances, { ...instance, cell: { ...instance.cell } });
+    }
+
+    for (const backpackItemId of patch.backpackItemDeletes ?? []) {
+      removeById(context.sceneBackpackItems, backpackItemId);
+    }
+    for (const backpackItem of patch.backpackItemUpserts ?? []) {
+      upsertById(context.sceneBackpackItems, { ...backpackItem });
     }
 
     if (patch.blockedEdgesClear) {
@@ -460,6 +475,7 @@ function clearDeletedSelections(context: Pick<
   | "sceneCharacters"
   | "sceneItemDefinitions"
   | "sceneItemInstances"
+  | "sceneBackpackItems"
   | "sceneDoors"
   | "sceneRooms"
   | "getSelectedTokenId"
@@ -470,6 +486,8 @@ function clearDeletedSelections(context: Pick<
   | "setInspectedItemDefinitionId"
   | "getInspectedItemInstanceId"
   | "setInspectedItemInstanceId"
+  | "getInspectedBackpackItemId"
+  | "setInspectedBackpackItemId"
   | "getSelectedItemInstanceId"
   | "setSelectedItemInstanceId"
   | "getSelectedDoorId"
@@ -503,6 +521,13 @@ function clearDeletedSelections(context: Pick<
     !context.sceneItemInstances.some((instance) => instance.id === context.getInspectedItemInstanceId())
   ) {
     context.setInspectedItemInstanceId(null);
+  }
+
+  if (
+    context.getInspectedBackpackItemId() &&
+    !context.sceneBackpackItems.some((item) => item.id === context.getInspectedBackpackItemId())
+  ) {
+    context.setInspectedBackpackItemId(null);
   }
 
   if (

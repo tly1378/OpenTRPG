@@ -208,16 +208,18 @@
       </aside>
 
       <section id="token-inspector-overlay" class="token-inspector-overlay" hidden aria-label="角色检视面板">
-        <div class="token-inspector-card">
-          <div class="token-inspector-header">
-            <div>
-              <p class="panel-eyebrow">角色检视</p>
+        <div class="token-inspector-shell">
+          <div class="token-inspector-card">
+            <div class="token-inspector-header">
+              <div>
+                <p class="panel-eyebrow">角色检视</p>
+              </div>
+              <button id="close-token-inspector" class="chat-close-button" type="button" aria-label="关闭角色检视">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+              </button>
             </div>
-            <button id="close-token-inspector" class="chat-close-button" type="button" aria-label="关闭角色检视">
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
-            </button>
-          </div>
-          <form id="token-selection-form" class="token-selection-form">
+            <form id="token-selection-form" class="token-selection-form">
+            <div id="token-profile-panel" class="token-inspector-tab-panel">
             <div id="token-name-display" class="token-name-display">
               <span id="token-name-value" class="token-name-value">角色</span>
               <input id="token-name-input" class="token-name-inline-input" type="text" maxlength="24" autocomplete="off" hidden />
@@ -243,8 +245,33 @@
             <div id="token-instance-actions" class="token-instance-actions" hidden>
               <button id="delete-token-instance" type="button" class="destructive-panel-action">删除棋子</button>
             </div>
-            <p id="token-panel-help" class="panel-help">修改后会同步到所有客户端。</p>
-          </form>
+            <p id="token-panel-help" class="panel-help" hidden></p>
+            </div>
+            <div id="token-backpack-panel" class="token-inspector-tab-panel" hidden>
+              <div class="panel-section">
+                <div id="token-backpack-title" class="panel-section-title">角色背包</div>
+                <div id="token-backpack-list" class="warehouse-list" aria-live="polite"></div>
+                <p id="token-backpack-help" class="panel-help">双击条目可查看详情。</p>
+              </div>
+            </div>
+            </form>
+          </div>
+          <div id="token-inspector-tabs" class="inspector-bookmarks" role="tablist" aria-label="角色检视切页">
+            <button id="token-inspector-tab-profile" type="button" class="inspector-bookmark is-active" role="tab" aria-selected="true" aria-label="角色信息" data-tab="profile">
+              <svg class="inspector-bookmark-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2" />
+                <path d="M5 20c0-4 3.5-7 7-7s7 3 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+              <span class="inspector-bookmark-label">角色信息</span>
+            </button>
+            <button id="token-inspector-tab-backpack" type="button" class="inspector-bookmark" role="tab" aria-selected="false" aria-label="角色背包" data-tab="backpack">
+              <svg class="inspector-bookmark-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M6 8h12v13H6V8Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                <path d="M9 8V6a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+              <span class="inspector-bookmark-label">角色背包</span>
+            </button>
+          </div>
         </div>
       </section>
 
@@ -303,38 +330,84 @@
         </div>
       </section>
 
-      <section id="item-instance-inspector-overlay" class="token-inspector-overlay" hidden aria-label="场景物品检视面板">
-        <div class="token-inspector-card">
+      <section id="item-instance-inspector-overlay" class="token-inspector-overlay" hidden aria-label="物品检视面板">
+        <div class="token-inspector-card item-instance-inspector-card">
           <div class="token-inspector-header">
             <div>
-              <p class="panel-eyebrow">场景物品检视</p>
+              <p class="panel-eyebrow">物品检视</p>
             </div>
-            <button id="close-item-instance-inspector" class="chat-close-button" type="button" aria-label="关闭场景物品检视">
+            <button id="close-item-instance-inspector" class="chat-close-button" type="button" aria-label="关闭物品检视">
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
             </button>
           </div>
-          <form id="item-instance-selection-form" class="token-selection-form">
-            <div class="panel-section">
-              <div class="panel-section-title">物品图标</div>
-              <div id="item-instance-icon-preview" class="character-avatar item-icon item-instance-icon-preview"></div>
+          <form id="item-instance-selection-form" class="token-selection-form item-instance-form">
+            <div class="item-instance-hero">
+              <div id="item-instance-icon-preview" class="character-avatar item-icon item-instance-icon-preview" aria-hidden="true"></div>
+              <div class="item-instance-hero-body">
+                <div id="item-instance-name-value" class="item-instance-name">物品</div>
+                <div class="item-instance-quantity-row">
+                  <span id="item-instance-quantity-value" class="item-instance-quantity-value">数量：1</span>
+                  <label id="item-instance-quantity-edit" class="item-instance-quantity-edit" hidden>
+                    <span class="item-instance-quantity-label">数量</span>
+                    <input id="item-quantity-input" class="item-quantity-input item-instance-quantity-input" type="number" min="1" max="9999" step="1" value="1" />
+                  </label>
+                </div>
+              </div>
             </div>
-            <div class="panel-field">
-              <span>名称</span>
-              <div id="item-instance-name-value" class="item-readonly-value">物品</div>
-            </div>
-            <div class="panel-field">
-              <span>描述</span>
+            <div class="item-instance-description-block">
               <p id="item-instance-description-value" class="item-readonly-description">暂无描述</p>
             </div>
-            <label class="panel-field">
-              <span>数量</span>
-              <input id="item-quantity-input" class="item-quantity-input" type="number" min="1" max="9999" step="1" value="1" />
-            </label>
             <div class="item-instance-actions">
+              <button id="split-item-instance" type="button" class="primary-panel-action subtle-panel-action" hidden>拆分</button>
+              <button id="take-item-instance" type="button" class="primary-panel-action item-instance-primary-action">拿取</button>
+              <button id="discard-item-instance" type="button" class="primary-panel-action" hidden>丢弃</button>
               <button id="delete-item-instance" type="button" class="destructive-panel-action">删除场景物品</button>
             </div>
-            <p id="item-instance-panel-help" class="panel-help">场景中的物品实体只能修改数量或删除。</p>
+            <div id="item-split-popover" class="item-split-popover" hidden>
+              <div class="item-split-popover-card">
+                <div class="item-split-popover-title">拆分数量</div>
+                <label class="item-split-slider-field">
+                  <span class="item-split-slider-label">拆出数量</span>
+                  <input id="item-split-slider" type="range" min="1" max="1" step="1" value="1" />
+                  <output id="item-split-value" for="item-split-slider">1</output>
+                </label>
+                <div class="item-split-popover-actions">
+                  <button id="cancel-item-split" type="button">取消</button>
+                  <button id="confirm-item-split" type="button" class="item-split-confirm-button">确定</button>
+                </div>
+              </div>
+            </div>
           </form>
+        </div>
+      </section>
+
+      <section id="warehouse-overlay" class="warehouse-overlay" hidden aria-label="仓库">
+        <div class="warehouse-overlay-card">
+          <div class="warehouse-overlay-header">
+            <div>
+              <p class="panel-eyebrow" id="warehouse-overlay-eyebrow">仓库</p>
+              <h2 id="warehouse-overlay-title">仓库</h2>
+            </div>
+            <button id="close-warehouse-overlay" class="chat-close-button" type="button" aria-label="关闭仓库">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+            </button>
+          </div>
+          <div id="warehouse-single-view" class="warehouse-single-view">
+            <div id="warehouse-single-list" class="warehouse-list" aria-live="polite"></div>
+          </div>
+          <div id="warehouse-transfer-view" class="warehouse-transfer-view" hidden>
+            <div class="warehouse-transfer-panels">
+              <div class="warehouse-panel">
+                <div id="warehouse-transfer-ground-title" class="warehouse-panel-title">空地</div>
+                <div id="warehouse-transfer-ground-list" class="warehouse-list" aria-live="polite"></div>
+              </div>
+              <div class="warehouse-panel">
+                <div id="warehouse-transfer-backpack-title" class="warehouse-panel-title">角色背包</div>
+                <div id="warehouse-transfer-backpack-list" class="warehouse-list" aria-live="polite"></div>
+              </div>
+            </div>
+          </div>
+          <p id="warehouse-overlay-help" class="panel-help">双击物品条目可查看详情。</p>
         </div>
       </section>
     </div>

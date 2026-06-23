@@ -4,6 +4,7 @@ export const sceneCharacters = [];
 export const sceneTokens = [];
 export const sceneItemDefinitions = [];
 export const sceneItemInstances = [];
+export const sceneBackpackItems = [];
 export const blockedVerticalEdges = new Set();
 export const blockedHorizontalEdges = new Set();
 export const sceneDoors = new Map();

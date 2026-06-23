@@ -12,7 +12,8 @@ import { DiceRollDisplayController } from "./controllers/diceRollDisplayControll
 import { queryDomRefs } from "./controllers/domRefs";
 import { installControlEventHandlers } from "./controllers/eventHandlers";
 import { LogicMapController } from "./controllers/logicMapController";
-import { renderSelectionPanel as renderSelectionInspectorPanel, renderItemDefinitionInspector as renderItemDefinitionInspectorPanel, renderItemInstanceInspector as renderItemInstanceInspectorPanel, renderTokenInspector as renderTokenInspectorPanel } from "./controllers/selectionInspector";
+import { renderSelectionPanel as renderSelectionInspectorPanel, renderItemDefinitionInspector as renderItemDefinitionInspectorPanel, renderItemInstanceInspector as renderItemInstanceInspectorPanel, renderTokenInspector as renderTokenInspectorPanel, renderWarehouseOverlay as renderWarehouseOverlayPanel } from "./controllers/selectionInspector";
+import { WarehouseController } from "./controllers/warehouseController";
 import { add, rotate } from "./utilities/geometry";
 import {
   movementBlockedEdgeSets as buildMovementBlockedEdgeSets,
@@ -21,6 +22,7 @@ import {
   worldToCell,
 } from "./modules/grid/grid";
 import { getItemStackForInstance } from "./modules/items/itemStacks";
+import { backpackWarehouseId, findGroundItemStack, getBackpackWarehouseItems, getGroundWarehouseItems, groundWarehouseId } from "./modules/warehouses/warehouses";
 import {
   computeImageResize,
   getResizeCursor,
@@ -69,6 +71,10 @@ import type {
   SceneImageSnapshot,
   SceneItemDefinition,
   SceneItemInstance,
+  SceneBackpackItem,
+  TokenInspectorTab,
+  WarehouseItemEntry,
+  WarehouseOverlayMode,
   SceneRoom,
   SceneToken,
   Vector2,
@@ -135,9 +141,18 @@ const {
   itemInstanceIconPreview,
   itemInstanceNameValue,
   itemInstanceDescriptionValue,
+  itemInstanceQuantityValue,
+  itemInstanceQuantityEdit,
   itemQuantityInput,
   deleteItemInstanceButton,
-  itemInstancePanelHelp,
+  splitItemInstanceButton,
+  takeItemInstanceButton,
+  discardItemInstanceButton,
+  itemSplitPopover,
+  itemSplitSlider,
+  itemSplitValue,
+  cancelItemSplitButton,
+  confirmItemSplitButton,
   avatarEditorTitle,
   selectionPanel,
   selectionEyebrow,
@@ -164,6 +179,13 @@ const {
   tokenPanelHelp,
   tokenNpcTypeControls,
   tokenNpcTypeInput,
+  tokenInspectorTabProfile,
+  tokenInspectorTabBackpack,
+  tokenProfilePanel,
+  tokenBackpackPanel,
+  tokenBackpackTitle,
+  tokenBackpackList,
+  tokenBackpackHelp,
   tokenInspectorOverlay,
   closeTokenInspectorButton,
   tokenInstanceActions,
@@ -186,6 +208,18 @@ const {
   diceModifierInput,
   diceModifierDecreaseButton,
   diceModifierIncreaseButton,
+  warehouseOverlay,
+  closeWarehouseOverlayButton,
+  warehouseOverlayEyebrow,
+  warehouseOverlayTitle,
+  warehouseSingleView,
+  warehouseSingleList,
+  warehouseTransferView,
+  warehouseTransferGroundTitle,
+  warehouseTransferGroundList,
+  warehouseTransferBackpackTitle,
+  warehouseTransferBackpackList,
+  warehouseOverlayHelp,
 } = queryDomRefs();
 
 const appState = createAppState();
@@ -197,6 +231,7 @@ const {
   sceneTokens,
   sceneItemDefinitions,
   sceneItemInstances,
+  sceneBackpackItems,
   tokenAvatarImages,
   itemIconImages,
   blockedVerticalEdges,
@@ -214,6 +249,7 @@ let {
   inspectedCharacterId,
   inspectedItemDefinitionId,
   inspectedItemInstanceId,
+  inspectedBackpackItemId,
   selectedItemInstanceId,
   selectedDoorId,
   selectedRoomId,
@@ -237,8 +273,13 @@ let {
   tokenNameEditing,
   itemNameEditing,
   itemDescriptionEditing,
+  tokenInspectorTab,
+  warehouseOverlayCell,
+  warehouseOverlayMode,
 } = appState;
 let adminUnfocusedRollVisibility: "hidden" | "public" = "hidden";
+let inspectedItemSingleFocus = false;
+let itemSplitPopoverOpen = false;
 const latencyPanelController = new LatencyPanelController(latencyPanel, isLoggedIn);
 const chatPanelController = new ChatPanelController(
   {
@@ -341,6 +382,7 @@ const appContext = createAppContext({
     sceneTokens,
     sceneItemDefinitions,
     sceneItemInstances,
+    sceneBackpackItems,
     tokenAvatarImages,
     itemIconImages,
     blockedVerticalEdges,
@@ -374,6 +416,10 @@ const appContext = createAppContext({
     getInspectedItemInstanceId: () => inspectedItemInstanceId,
     setInspectedItemInstanceId: (instanceId: string | null) => {
       inspectedItemInstanceId = instanceId;
+    },
+    getInspectedBackpackItemId: () => inspectedBackpackItemId,
+    setInspectedBackpackItemId: (backpackItemId: string | null) => {
+      inspectedBackpackItemId = backpackItemId;
     },
     getSelectedItemInstanceId: () => selectedItemInstanceId,
     setSelectedItemInstanceId: (instanceId: string | null) => {
@@ -469,6 +515,7 @@ const appContext = createAppContext({
     closeItemInstanceInspector,
     updateItemDefinitionInspector,
     updateItemInstanceInspector,
+    updateWarehouseOverlay,
     updateSelectionPanel,
     showIdentityScreen,
     selectImage,
@@ -515,6 +562,7 @@ sceneSync = createSceneSyncApplier({
   updateTokenInspector: appContext.ui.updateTokenInspector,
   updateItemDefinitionInspector: appContext.ui.updateItemDefinitionInspector,
   updateItemInstanceInspector: appContext.ui.updateItemInstanceInspector,
+  updateWarehouseOverlay,
   updateSelectionPanel: appContext.ui.updateSelectionPanel,
   showIdentityScreen: appContext.ui.showIdentityScreen,
 });
@@ -567,6 +615,18 @@ const itemController = new ItemController(
     updateItemInstanceInspector: appContext.ui.updateItemInstanceInspector,
   },
   appContext.network,
+);
+const warehouseController = new WarehouseController(
+  {
+    getPlayerCharacterId,
+    canTransferWarehouse,
+  },
+  {
+    sendWarehouseTransfer: (fromWarehouse, toWarehouse, itemId) =>
+      networkClient.sendWarehouseTransfer(fromWarehouse, toWarehouse, itemId),
+    sendWarehouseSplit: (warehouseId, itemId, splitQuantity) =>
+      networkClient.sendWarehouseSplit(warehouseId, itemId, splitQuantity),
+  },
 );
 avatarEditorController = new AvatarEditorController(
   {
@@ -811,6 +871,18 @@ function getInspectedItemInstance(): SceneItemInstance | null {
   return sceneItemInstances.find((instance) => instance.id === inspectedItemInstanceId) ?? null;
 }
 
+function getInspectedBackpackItem(): SceneBackpackItem | null {
+  return sceneBackpackItems.find((item) => item.id === inspectedBackpackItemId) ?? null;
+}
+
+function getItemDefinitionForBackpackItem(item: SceneBackpackItem | null): SceneItemDefinition | null {
+  if (!item) {
+    return null;
+  }
+
+  return sceneItemDefinitions.find((definition) => definition.id === item.definitionId) ?? null;
+}
+
 function getItemDefinitionForInstance(instance: SceneItemInstance | null): SceneItemDefinition | null {
   if (!instance) {
     return null;
@@ -821,6 +893,119 @@ function getItemDefinitionForInstance(instance: SceneItemInstance | null): Scene
 
 function canInspectItem(): boolean {
   return isLoggedIn();
+}
+
+function getPlayerCharacterId(): string | null {
+  if (currentIdentity?.type === "player") {
+    return currentIdentity.id;
+  }
+
+  return null;
+}
+
+function canTransferWarehouse(characterId: string): boolean {
+  if (!isLoggedIn()) {
+    return false;
+  }
+
+  if (isAdmin()) {
+    return true;
+  }
+
+  return currentIdentity?.type === "player" && currentIdentity.id === characterId;
+}
+
+function canTakeItem(): boolean {
+  return getPlayerCharacterId() !== null;
+}
+
+function canSplitInspectedItem(): boolean {
+  if (!isLoggedIn()) {
+    return false;
+  }
+
+  const backpackItem = getInspectedBackpackItem();
+  if (backpackItem) {
+    return canTransferWarehouse(backpackItem.characterId);
+  }
+
+  return getInspectedItemInstance() !== null;
+}
+
+function getInspectedSplitContext(): { warehouseId: string; itemId: string; maxSplit: number } | null {
+  const backpackItem = getInspectedBackpackItem();
+  if (backpackItem && backpackItem.quantity > 1) {
+    return {
+      warehouseId: backpackWarehouseId(backpackItem.characterId),
+      itemId: backpackItem.id,
+      maxSplit: backpackItem.quantity - 1,
+    };
+  }
+
+  const instance = getInspectedItemInstance();
+  if (instance && instance.quantity > 1) {
+    return {
+      warehouseId: groundWarehouseId(instance.cell),
+      itemId: instance.id,
+      maxSplit: instance.quantity - 1,
+    };
+  }
+
+  return null;
+}
+
+function syncItemSplitSlider(maxSplit: number): void {
+  itemSplitSlider.min = "1";
+  itemSplitSlider.max = String(maxSplit);
+  itemSplitSlider.value = "1";
+  itemSplitValue.textContent = "1";
+}
+
+function openItemSplitPopover(): void {
+  const context = getInspectedSplitContext();
+  if (!context) {
+    return;
+  }
+
+  itemSplitPopoverOpen = true;
+  syncItemSplitSlider(context.maxSplit);
+  updateItemInstanceInspector();
+}
+
+function closeItemSplitPopover(): void {
+  itemSplitPopoverOpen = false;
+  updateItemInstanceInspector();
+}
+
+function updateItemSplitSlider(value: number): void {
+  const context = getInspectedSplitContext();
+  if (!context) {
+    return;
+  }
+
+  const normalized = Math.min(context.maxSplit, Math.max(1, Math.floor(value)));
+  itemSplitSlider.value = String(normalized);
+  itemSplitValue.textContent = String(normalized);
+}
+
+function confirmItemSplit(): void {
+  const context = getInspectedSplitContext();
+  if (!context) {
+    closeItemSplitPopover();
+    return;
+  }
+
+  const splitQuantity = Number.parseInt(itemSplitSlider.value, 10);
+  if (!Number.isFinite(splitQuantity) || splitQuantity < 1 || splitQuantity > context.maxSplit) {
+    return;
+  }
+
+  warehouseController.splitItem(context.warehouseId, context.itemId, splitQuantity);
+  closeItemSplitPopover();
+}
+
+function transferWarehouseItem(fromWarehouseId: string, toWarehouseId: string, itemId: string): void {
+  warehouseController.transferItem(fromWarehouseId, toWarehouseId, itemId);
 }
 
 function getSelectedDoor(): SceneDoor | null {
@@ -945,6 +1130,7 @@ function showIdentityScreen(): void {
   inspectedCharacterId = null;
   inspectedItemDefinitionId = null;
   inspectedItemInstanceId = null;
+  inspectedBackpackItemId = null;
   selectedItemInstanceId = null;
   selectedDoorId = null;
   selectedRoomId = null;
@@ -954,6 +1140,7 @@ function showIdentityScreen(): void {
   previewTokenPosition = null;
   characterPanelController.setOpen(false);
   itemPanelController.setOpen(false);
+  closeWarehouseOverlay();
   identityBadge.textContent = identityLabel(null);
   renderIdentityList();
   rebuildModeOptions();
@@ -1159,9 +1346,23 @@ function updateTokenInspector(): void {
       tokenPanelHelp,
       tokenNpcTypeControls,
       tokenNpcTypeInput,
+      tokenInspectorTabProfile,
+      tokenInspectorTabBackpack,
+      tokenProfilePanel,
+      tokenBackpackPanel,
+      tokenBackpackTitle,
+      tokenBackpackList,
+      tokenBackpackHelp,
     },
     character,
     tokenInstance: getInspectedTokenInstance(),
+    activeTab: tokenInspectorTab,
+    backpackItems: character ? getBackpackWarehouseItems(character.id, sceneBackpackItems) : [],
+    definitionsById: new Map(sceneItemDefinitions.map((definition) => [definition.id, definition])),
+    iconImages: itemIconImages,
+    canTransferBackpack: character ? canTransferWarehouse(character.id) : false,
+    onWarehouseTransfer: transferWarehouseItem,
+    onItemInspect: openWarehouseItemInspect,
     canInspectToken: canInspectToken(),
     canControlToken: canEditToken,
     isAdmin: isAdmin(),
@@ -1172,6 +1373,129 @@ function updateTokenInspector(): void {
   });
 }
 
+function updateWarehouseOverlay(): void {
+  const playerCharacterId = getPlayerCharacterId();
+  const playerCharacter = playerCharacterId
+    ? (sceneCharacters.find((character) => character.id === playerCharacterId) ?? null)
+    : null;
+
+  renderWarehouseOverlayPanel({
+    elements: {
+      warehouseOverlay,
+      warehouseOverlayEyebrow,
+      warehouseOverlayTitle,
+      warehouseSingleView,
+      warehouseSingleList,
+      warehouseTransferView,
+      warehouseTransferGroundTitle,
+      warehouseTransferGroundList,
+      warehouseTransferBackpackTitle,
+      warehouseTransferBackpackList,
+      warehouseOverlayHelp,
+    },
+    mode: warehouseOverlayMode,
+    cell: warehouseOverlayCell,
+    groundItems: warehouseOverlayCell ? getGroundWarehouseItems(warehouseOverlayCell, sceneItemInstances) : [],
+    backpackItems: playerCharacterId ? getBackpackWarehouseItems(playerCharacterId, sceneBackpackItems) : [],
+    backpackCharacterId: playerCharacterId,
+    backpackCharacterName: playerCharacter?.name ?? null,
+    definitionsById: new Map(sceneItemDefinitions.map((definition) => [definition.id, definition])),
+    iconImages: itemIconImages,
+    canTransfer: Boolean(playerCharacterId && canTransferWarehouse(playerCharacterId)),
+    onWarehouseTransfer: transferWarehouseItem,
+    onItemInspect: openWarehouseItemInspect,
+  });
+}
+
+function openWarehouse(cell: Cell, mode: WarehouseOverlayMode): void {
+  warehouseOverlayCell = { ...cell };
+  warehouseOverlayMode = mode;
+  closeItemInstanceInspector();
+  updateWarehouseOverlay();
+}
+
+function openGroundWarehouse(cell: Cell): void {
+  openWarehouse(cell, "single");
+}
+
+function openWarehouseTransfer(cell: Cell): void {
+  openWarehouse(cell, "transfer");
+}
+
+function closeWarehouseOverlay(): void {
+  warehouseOverlayCell = null;
+  warehouseOverlayMode = null;
+  updateWarehouseOverlay();
+}
+
+function setTokenInspectorTab(tab: TokenInspectorTab): void {
+  tokenInspectorTab = tab;
+  updateTokenInspector();
+}
+
+function openWarehouseItemInspect(entry: WarehouseItemEntry): void {
+  if (!canInspectItem()) {
+    return;
+  }
+
+  if (entry.source === "ground") {
+    openItemInstanceInspector(entry.id, { keepWarehouseOpen: true, singleItemFocus: true });
+    return;
+  }
+
+  openBackpackItemInspector(entry.id);
+}
+
+function openBackpackItemInspector(backpackItemId: string): void {
+  if (!sceneBackpackItems.some((item) => item.id === backpackItemId)) {
+    return;
+  }
+
+  inspectedBackpackItemId = backpackItemId;
+  inspectedItemInstanceId = null;
+  inspectedItemDefinitionId = null;
+  itemNameEditing = false;
+  itemDescriptionEditing = false;
+  updateItemDefinitionInspector();
+  updateItemInstanceInspector();
+}
+
+
+function canDiscardInspectedBackpackItem(): boolean {
+  const backpackItem = getInspectedBackpackItem();
+  if (!backpackItem || !canTransferWarehouse(backpackItem.characterId)) {
+    return false;
+  }
+
+  return sceneTokens.some((token) => token.id === backpackItem.characterId);
+}
+
+function takeInspectedItemToBackpack(): void {
+  const instance = getInspectedItemInstance();
+  const playerCharacterId = getPlayerCharacterId();
+  if (!instance || !playerCharacterId) {
+    return;
+  }
+
+  warehouseController.takeItemToPlayerBackpack(instance.id, instance.cell);
+  closeItemInstanceInspector();
+}
+
+function discardInspectedBackpackItem(): void {
+  const backpackItem = getInspectedBackpackItem();
+  if (!backpackItem || !canDiscardInspectedBackpackItem()) {
+    return;
+  }
+
+  const token = sceneTokens.find((candidate) => candidate.id === backpackItem.characterId);
+  if (!token) {
+    return;
+  }
+
+  warehouseController.discardBackpackItemToGround(backpackItem.id, backpackItem.characterId, token.cell);
+  closeItemInstanceInspector();
+}
+
 function openTokenInspector(characterId: string): void {
   if (!sceneCharacters.some((character) => character.id === characterId)) {
     return;
@@ -1180,7 +1504,10 @@ function openTokenInspector(characterId: string): void {
   inspectedCharacterId = characterId;
   inspectedItemDefinitionId = null;
   inspectedItemInstanceId = null;
+  inspectedBackpackItemId = null;
   tokenNameEditing = false;
+  tokenInspectorTab = "profile";
+  closeWarehouseOverlay();
   avatarEditorTitle.textContent = "调整角色头像";
   updateTokenInspector();
   updateItemDefinitionInspector();
@@ -1190,6 +1517,7 @@ function openTokenInspector(characterId: string): void {
 function closeTokenInspector(): void {
   inspectedCharacterId = null;
   tokenNameEditing = false;
+  tokenInspectorTab = "profile";
   updateTokenInspector();
 }
 
@@ -1200,6 +1528,7 @@ function openItemDefinitionInspector(definitionId: string): void {
 
   inspectedItemDefinitionId = definitionId;
   inspectedItemInstanceId = null;
+  inspectedBackpackItemId = null;
   itemNameEditing = false;
   itemDescriptionEditing = false;
   avatarEditorTitle.textContent = "调整物品图标";
@@ -1214,21 +1543,32 @@ function closeItemDefinitionInspector(): void {
   updateItemDefinitionInspector();
 }
 
-function openItemInstanceInspector(instanceId: string): void {
+function openItemInstanceInspector(
+  instanceId: string,
+  options?: { keepWarehouseOpen?: boolean; singleItemFocus?: boolean },
+): void {
   if (!sceneItemInstances.some((instance) => instance.id === instanceId)) {
     return;
   }
 
   inspectedItemInstanceId = instanceId;
+  inspectedBackpackItemId = null;
   inspectedItemDefinitionId = null;
   itemNameEditing = false;
   itemDescriptionEditing = false;
+  inspectedItemSingleFocus = options?.singleItemFocus ?? false;
+  if (!options?.keepWarehouseOpen) {
+    closeWarehouseOverlay();
+  }
   updateItemDefinitionInspector();
   updateItemInstanceInspector();
 }
 
 function closeItemInstanceInspector(): void {
   inspectedItemInstanceId = null;
+  inspectedBackpackItemId = null;
+  inspectedItemSingleFocus = false;
+  itemSplitPopoverOpen = false;
   updateItemInstanceInspector();
 }
 
@@ -1264,23 +1604,39 @@ function updateItemDefinitionInspector(): void {
 
 function updateItemInstanceInspector(): void {
   const instance = getInspectedItemInstance();
+  const backpackItem = getInspectedBackpackItem();
   renderItemInstanceInspectorPanel({
     elements: {
       itemInstanceInspectorOverlay,
       itemInstanceNameValue,
       itemInstanceDescriptionValue,
       itemInstanceIconPreview,
+      itemInstanceQuantityValue,
+      itemInstanceQuantityEdit,
       itemQuantityInput,
       deleteItemInstanceButton,
-      itemInstancePanelHelp,
+      splitItemInstanceButton,
+      takeItemInstanceButton,
+      discardItemInstanceButton,
+      itemSplitPopover,
+      itemSplitSlider,
+      itemSplitValue,
+      cancelItemSplitButton,
+      confirmItemSplitButton,
     },
-    definition: getItemDefinitionForInstance(instance),
+    definition: backpackItem ? getItemDefinitionForBackpackItem(backpackItem) : getItemDefinitionForInstance(instance),
     instance,
+    backpackItem,
     stack: getItemStackForInstance(instance, sceneItemInstances),
+    singleItemFocus: inspectedItemSingleFocus,
     definitionsById: new Map(sceneItemDefinitions.map((definition) => [definition.id, definition])),
     iconImages: itemIconImages,
     isAdmin: isAdmin(),
     canInspect: canInspectItem(),
+    canTakeItem: canTakeItem(),
+    canSplitItem: canSplitInspectedItem(),
+    canDiscardBackpackItem: canDiscardInspectedBackpackItem(),
+    itemSplitPopoverOpen,
   });
 }
 
@@ -1322,7 +1678,17 @@ function selectItemInstance(instanceId: string | null, inspect = false): void {
     selectedRoomId = null;
     closeTokenInspector();
     if (inspect) {
-      openItemInstanceInspector(instanceId);
+      const instance = sceneItemInstances.find((candidate) => candidate.id === instanceId);
+      const stack = getItemStackForInstance(instance ?? null, sceneItemInstances);
+      if (stack && stack.instances.length > 1) {
+        if (isAdmin()) {
+          openGroundWarehouse(stack.cell);
+        } else {
+          openWarehouseTransfer(stack.cell);
+        }
+      } else {
+        openItemInstanceInspector(instanceId);
+      }
     }
   }
   renderDicePanel();
@@ -1755,6 +2121,17 @@ installControlEventHandlers({
     itemInstanceSelectionForm,
     itemQuantityInput,
     deleteItemInstanceButton,
+    splitItemInstanceButton,
+    takeItemInstanceButton,
+    discardItemInstanceButton,
+    itemSplitPopover,
+    itemSplitSlider,
+    cancelItemSplitButton,
+    confirmItemSplitButton,
+    tokenInspectorTabProfile,
+    tokenInspectorTabBackpack,
+    warehouseOverlay,
+    closeWarehouseOverlayButton,
   },
   state: {
     isLoggedIn,
@@ -1818,6 +2195,14 @@ installControlEventHandlers({
     updateItemInstanceQuantity: (quantity) => itemController.updateItemInstanceQuantity(quantity),
     stopItemQuantityEditing: () => itemController.stopItemQuantityEditing(),
     deleteItemInstance,
+    takeInspectedItemToBackpack,
+    discardInspectedBackpackItem,
+    openItemSplitPopover,
+    closeItemSplitPopover,
+    updateItemSplitSlider,
+    confirmItemSplit,
+    setTokenInspectorTab,
+    closeWarehouseOverlay,
     updateCharacterIsNpc,
     closeTokenInspector,
     deleteToken,
@@ -1838,5 +2223,6 @@ renderItemPanel();
 updateTokenInspector();
 updateItemDefinitionInspector();
 updateItemInstanceInspector();
+updateWarehouseOverlay();
 resizeCanvas();
 requestAnimationFrame(tick);
