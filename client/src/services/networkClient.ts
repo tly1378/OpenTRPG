@@ -39,6 +39,33 @@ export type SceneSnapshot = {
   rooms: SceneRoom[];
 };
 
+type BlockedEdgeChange = {
+  key: string;
+  blocked: boolean;
+};
+
+type DoorEdgeRef = {
+  type: WallEdgeType;
+  x: number;
+  y: number;
+};
+
+export type ScenePatch = {
+  imageUpserts?: SceneImageSnapshot[];
+  imageDeletes?: string[];
+  characterUpserts?: SceneCharacter[];
+  characterDeletes?: string[];
+  tokenUpserts?: SceneToken[];
+  tokenDeletes?: string[];
+  blockedVerticalEdges?: BlockedEdgeChange[];
+  blockedHorizontalEdges?: BlockedEdgeChange[];
+  blockedEdgesClear?: boolean;
+  doorUpserts?: SceneDoor[];
+  doorDeletes?: DoorEdgeRef[];
+  roomUpserts?: SceneRoom[];
+  roomDeletes?: string[];
+};
+
 type NetworkMessage =
   | {
       type: "ready" | "hello";
@@ -66,6 +93,10 @@ type NetworkMessage =
       serverTime: number;
     }
   | {
+      type: "scene:patch";
+      serverTime: number;
+    } & ScenePatch
+  | {
       type: "chat:history";
       messages: ChatMessage[];
       serverTime: number;
@@ -92,7 +123,8 @@ export class NetworkClient {
 
   constructor(
     private readonly onChange: (snapshot: NetworkSnapshot) => void,
-    private readonly onSceneChange: (snapshot: SceneSnapshot) => void,
+    private readonly onSceneSnapshot: (snapshot: SceneSnapshot) => void,
+    private readonly onScenePatch: (patch: ScenePatch) => void,
     private readonly onChatMessages: (messages: ChatMessage[], mode: "replace" | "append") => void,
   ) {}
 
@@ -322,7 +354,7 @@ export class NetworkClient {
     }
 
     if (message.type === "scene:snapshot") {
-      this.onSceneChange({
+      this.onSceneSnapshot({
         images: message.images ?? [],
         characters: message.characters ?? message.tokens,
         tokens: message.tokens,
@@ -331,6 +363,12 @@ export class NetworkClient {
         doors: message.doors ?? [],
         rooms: message.rooms ?? [],
       });
+      return;
+    }
+
+    if (message.type === "scene:patch") {
+      const { type: _type, serverTime: _serverTime, ...patch } = message;
+      this.onScenePatch(patch);
       return;
     }
 

@@ -12,23 +12,11 @@ import type {
 import { findPath as findGridPath, movementBlockedEdgeSets as buildMovementBlockedEdgeSets, sameCell } from "../modules/grid/grid";
 import { doorId } from "../modules/grid/logicMapUtils";
 import { loadImageSource } from "../modules/image/imageImport";
-import type { SceneSnapshot } from "./networkClient";
+import type { ScenePatch, SceneSnapshot } from "./networkClient";
 
-type TokenAvatarImage = {
-  src: string;
-  image: HTMLImageElement;
-};
+type TokenAvatarImage = { src: string; image: HTMLImageElement };
 
-export function sceneImageSnapshot(image: SceneImage): SceneImageSnapshot {
-  const { image: _imageElement, ...snapshot } = image;
-  return { ...snapshot };
-}
-
-export function sceneImageSnapshots(images: SceneImage[]): SceneImageSnapshot[] {
-  return images.map(sceneImageSnapshot);
-}
-
-export function createSceneSnapshotApplier(context: {
+export type SceneSyncApplierContext = {
   sceneImages: SceneImage[];
   sceneCharacters: SceneCharacter[];
   sceneTokens: SceneToken[];
@@ -62,38 +50,55 @@ export function createSceneSnapshotApplier(context: {
   updateTokenInspector: () => void;
   updateSelectionPanel: () => void;
   showIdentityScreen: () => void;
-}): (snapshot: SceneSnapshot) => void {
-  let imageSnapshotVersion = 0;
+};
 
-  async function applyImageSnapshots(snapshots: SceneImageSnapshot[]): Promise<void> {
-    const version = ++imageSnapshotVersion;
-    const existingImages = new Map(context.sceneImages.map((image) => [image.id, image]));
-    const nextImages = await Promise.all(
-      snapshots.map(async (snapshot): Promise<SceneImage | null> => {
-        const existingImage = existingImages.get(snapshot.id);
-        if (existingImage?.src === snapshot.src) {
-          Object.assign(existingImage, snapshot);
-          return existingImage;
+export function sceneImageSnapshot(image: SceneImage): SceneImageSnapshot {
+  const { image: _imageElement, ...snapshot } = image;
+  return snapshot;
+}
+
+export function sceneImageSnapshots(images: SceneImage[]): SceneImageSnapshot[] {
+  return images.map(sceneImageSnapshot);
+}
+
+export function createSceneSyncApplier(context: SceneSyncApplierContext) {
+  let imageSyncVersion = 0;
+
+  async function syncImages(snapshots: SceneImageSnapshot[], replaceAll: boolean): Promise<void> {
+    const version = ++imageSyncVersion;
+    const existingById = new Map(context.sceneImages.map((image) => [image.id, image]));
+    const nextImages: SceneImage[] = replaceAll ? [] : [...context.sceneImages];
+
+    for (const snapshot of snapshots) {
+      const existing = existingById.get(snapshot.id);
+      if (existing?.src === snapshot.src) {
+        Object.assign(existing, snapshot);
+        if (!replaceAll && !nextImages.includes(existing)) {
+          nextImages.push(existing);
         }
+        continue;
+      }
 
-        try {
-          const imageElement = await loadImageSource(snapshot.src, snapshot.name);
-          return {
-            ...snapshot,
-            image: imageElement,
-          };
-        } catch (error) {
-          console.error(error);
-          return null;
+      try {
+        const imageElement = await loadImageSource(snapshot.src, snapshot.name);
+        const nextImage: SceneImage = { ...snapshot, image: imageElement };
+        const index = nextImages.findIndex((image) => image.id === snapshot.id);
+        if (index === -1) {
+          nextImages.push(nextImage);
+        } else {
+          nextImages[index] = nextImage;
         }
-      }),
-    );
+      } catch (error) {
+        console.error(error);
+      }
+    }
 
-    if (version !== imageSnapshotVersion) {
+    if (version !== imageSyncVersion) {
       return;
     }
 
-    context.sceneImages.splice(0, context.sceneImages.length, ...nextImages.filter((image): image is SceneImage => image !== null));
+    nextImages.sort((a, b) => a.z - b.z);
+    context.sceneImages.splice(0, context.sceneImages.length, ...nextImages);
 
     if (context.getSelectedImageId() && !context.sceneImages.some((image) => image.id === context.getSelectedImageId())) {
       context.setSelectedImageId(null);
@@ -102,22 +107,12 @@ export function createSceneSnapshotApplier(context: {
     context.updateSelectionPanel();
   }
 
-  return (snapshot: SceneSnapshot): void => {
-    void applyImageSnapshots(snapshot.images);
+  function finalize(previousTokens: Map<string, SceneToken>, changedTokens: SceneToken[], shouldExitDeletedIdentity: boolean): void {
+    syncTokenAvatarImages(context.sceneCharacters, context.tokenAvatarImages);
+    context.setNextTokenIndex(nextAvailableTokenIndex(context.sceneCharacters));
 
-    const nextCharacters = snapshot.characters.map((character) => ({ ...character }));
-    const previousTokens = new Map(context.sceneTokens.map((token) => [token.id, token]));
-    const nextTokens = snapshot.tokens.map((token) => ({ ...token, cell: { ...token.cell } }));
-
-    applyPendingTokenNames(nextCharacters, context.pendingTokenNames);
-    syncTokenFieldsFromCharacters(nextTokens, nextCharacters);
-
-    const currentIdentity = context.getCurrentIdentity();
-    const shouldExitDeletedIdentity =
-      currentIdentity?.type === "player" &&
-      !nextCharacters.some((character) => character.id === currentIdentity.id && !character.isNpc);
     const animations = buildRemoteMoveAnimations({
-      nextTokens,
+      nextTokens: changedTokens,
       previousTokens,
       sceneTokens: context.sceneTokens,
       blockedVerticalEdges: context.blockedVerticalEdges,
@@ -126,32 +121,12 @@ export function createSceneSnapshotApplier(context: {
       movingTokens: context.getMovingTokens(),
     });
 
-    context.sceneCharacters.splice(0, context.sceneCharacters.length, ...nextCharacters);
-    context.sceneTokens.splice(0, context.sceneTokens.length, ...nextTokens);
-    syncTokenAvatarImages(context.sceneCharacters, context.tokenAvatarImages);
-    replaceSet(context.blockedVerticalEdges, snapshot.blockedVerticalEdges);
-    replaceSet(context.blockedHorizontalEdges, snapshot.blockedHorizontalEdges);
-    context.sceneDoors.clear();
-    for (const door of snapshot.doors) {
-      context.sceneDoors.set(doorId(door), { ...door });
-    }
-    context.sceneRooms.splice(
-      0,
-      context.sceneRooms.length,
-      ...snapshot.rooms.map((room) => ({
-        ...room,
-        cells: room.cells.map((cell) => ({ ...cell })),
-      })),
-    );
-    context.setNextTokenIndex(nextAvailableTokenIndex(context.sceneCharacters));
-
     clearDeletedSelections(context);
     syncCurrentPlayerIdentity(context);
     context.setMovingTokens([
       ...context.getMovingTokens().filter((animation) => context.sceneTokens.some((token) => token.id === animation.tokenId)),
       ...animations,
     ]);
-
     context.clearPreviewState();
     context.renderIdentityList();
     context.renderCharacterPanel();
@@ -161,7 +136,130 @@ export function createSceneSnapshotApplier(context: {
     if (shouldExitDeletedIdentity) {
       context.showIdentityScreen();
     }
-  };
+  }
+
+  function applySnapshot(snapshot: SceneSnapshot): void {
+    void syncImages(snapshot.images, true);
+
+    const previousTokens = new Map(context.sceneTokens.map((token) => [token.id, token]));
+    const nextTokens = snapshot.tokens.map((token) => ({ ...token, cell: { ...token.cell } }));
+    const nextCharacters = snapshot.characters.map((character) => ({ ...character }));
+
+    applyPendingTokenNames(nextCharacters, context.pendingTokenNames);
+    syncTokenFieldsFromCharacters(nextTokens, nextCharacters);
+
+    context.sceneCharacters.splice(0, context.sceneCharacters.length, ...nextCharacters);
+    context.sceneTokens.splice(0, context.sceneTokens.length, ...nextTokens);
+    replaceSet(context.blockedVerticalEdges, snapshot.blockedVerticalEdges);
+    replaceSet(context.blockedHorizontalEdges, snapshot.blockedHorizontalEdges);
+    context.sceneDoors.clear();
+    for (const door of snapshot.doors) {
+      context.sceneDoors.set(doorId(door), { ...door });
+    }
+    context.sceneRooms.splice(
+      0,
+      context.sceneRooms.length,
+      ...snapshot.rooms.map((room) => ({ ...room, cells: room.cells.map((cell) => ({ ...cell })) })),
+    );
+
+    const identity = context.getCurrentIdentity();
+    finalize(
+      previousTokens,
+      nextTokens,
+      identity?.type === "player" && !nextCharacters.some((character) => character.id === identity.id && !character.isNpc),
+    );
+  }
+
+  function applyPatch(patch: ScenePatch): void {
+    const previousTokens = new Map(context.sceneTokens.map((token) => [token.id, { ...token, cell: { ...token.cell } }]));
+    const changedTokens: SceneToken[] = [];
+
+    for (const imageId of patch.imageDeletes ?? []) {
+      removeById(context.sceneImages, imageId);
+    }
+    if (patch.imageUpserts?.length) {
+      void syncImages(patch.imageUpserts, false);
+    }
+
+    for (const characterId of patch.characterDeletes ?? []) {
+      removeById(context.sceneCharacters, characterId);
+    }
+    for (const character of patch.characterUpserts ?? []) {
+      upsertById(context.sceneCharacters, { ...character });
+    }
+    if (patch.characterUpserts?.length) {
+      applyPendingTokenNames(context.sceneCharacters, context.pendingTokenNames);
+    }
+
+    for (const tokenId of patch.tokenDeletes ?? []) {
+      removeById(context.sceneTokens, tokenId);
+    }
+    for (const token of patch.tokenUpserts ?? []) {
+      const nextToken = { ...token, cell: { ...token.cell } };
+      upsertById(context.sceneTokens, nextToken);
+      changedTokens.push(nextToken);
+    }
+    if (patch.tokenUpserts?.length) {
+      syncTokenFieldsFromCharacters(context.sceneTokens, context.sceneCharacters);
+    }
+
+    if (patch.blockedEdgesClear) {
+      context.blockedVerticalEdges.clear();
+      context.blockedHorizontalEdges.clear();
+      context.sceneDoors.clear();
+    }
+    applyEdgeChanges(context.blockedVerticalEdges, patch.blockedVerticalEdges);
+    applyEdgeChanges(context.blockedHorizontalEdges, patch.blockedHorizontalEdges);
+
+    for (const edge of patch.doorDeletes ?? []) {
+      context.sceneDoors.delete(doorId(edge));
+    }
+    for (const door of patch.doorUpserts ?? []) {
+      context.sceneDoors.set(doorId(door), { ...door });
+    }
+
+    for (const roomId of patch.roomDeletes ?? []) {
+      removeById(context.sceneRooms, roomId);
+    }
+    for (const room of patch.roomUpserts ?? []) {
+      upsertById(context.sceneRooms, { ...room, cells: room.cells.map((cell) => ({ ...cell })) });
+    }
+
+    const identity = context.getCurrentIdentity();
+    finalize(
+      previousTokens,
+      changedTokens,
+      Boolean(patch.characterDeletes?.includes(identity?.id ?? "") && identity?.type === "player"),
+    );
+  }
+
+  return { applySnapshot, applyPatch };
+}
+
+function upsertById<T extends { id: string }>(items: T[], item: T): void {
+  const index = items.findIndex((candidate) => candidate.id === item.id);
+  if (index === -1) {
+    items.push(item);
+  } else {
+    items[index] = item;
+  }
+}
+
+function removeById<T extends { id: string }>(items: T[], id: string): void {
+  const index = items.findIndex((candidate) => candidate.id === id);
+  if (index !== -1) {
+    items.splice(index, 1);
+  }
+}
+
+function applyEdgeChanges(target: Set<string>, changes: { key: string; blocked: boolean }[] | undefined): void {
+  for (const change of changes ?? []) {
+    if (change.blocked) {
+      target.add(change.key);
+    } else {
+      target.delete(change.key);
+    }
+  }
 }
 
 function applyPendingTokenNames(characters: SceneCharacter[], pendingTokenNames: Map<string, string>): void {
@@ -280,24 +378,22 @@ function nextAvailableTokenIndex(characters: SceneCharacter[]): number {
   return maxTokenIndex + 1;
 }
 
-function clearDeletedSelections(
-  context: Pick<
-    Parameters<typeof createSceneSnapshotApplier>[0],
-    | "sceneTokens"
-    | "sceneCharacters"
-    | "sceneDoors"
-    | "sceneRooms"
-    | "getSelectedTokenId"
-    | "setSelectedTokenId"
-    | "getInspectedCharacterId"
-    | "setInspectedCharacterId"
-    | "getSelectedDoorId"
-    | "setSelectedDoorId"
-    | "getSelectedRoomId"
-    | "setSelectedRoomId"
-    | "clearTokenNameEditing"
-  >,
-): void {
+function clearDeletedSelections(context: Pick<
+  SceneSyncApplierContext,
+  | "sceneTokens"
+  | "sceneCharacters"
+  | "sceneDoors"
+  | "sceneRooms"
+  | "getSelectedTokenId"
+  | "setSelectedTokenId"
+  | "getInspectedCharacterId"
+  | "setInspectedCharacterId"
+  | "getSelectedDoorId"
+  | "setSelectedDoorId"
+  | "getSelectedRoomId"
+  | "setSelectedRoomId"
+  | "clearTokenNameEditing"
+>): void {
   if (context.getSelectedTokenId() && !context.sceneTokens.some((token) => token.id === context.getSelectedTokenId())) {
     context.setSelectedTokenId(null);
   }
@@ -316,12 +412,10 @@ function clearDeletedSelections(
   }
 }
 
-function syncCurrentPlayerIdentity(
-  context: Pick<
-    Parameters<typeof createSceneSnapshotApplier>[0],
-    "sceneCharacters" | "getCurrentIdentity" | "setCurrentIdentity" | "updateNetworkIdentity" | "updateIdentityBadge"
-  >,
-): void {
+function syncCurrentPlayerIdentity(context: Pick<
+  SceneSyncApplierContext,
+  "sceneCharacters" | "getCurrentIdentity" | "setCurrentIdentity" | "updateNetworkIdentity" | "updateIdentityBadge"
+>): void {
   const currentIdentity = context.getCurrentIdentity();
   if (currentIdentity?.type !== "player") {
     return;

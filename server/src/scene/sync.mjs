@@ -53,3 +53,12 @@ export function sceneSnapshotPayload(serverTime = Date.now()) {
     serverTime,
   };
 }
+
+export function characterFromToken(token) {
+  const { cell: _cell, ...character } = token;
+  return character;
+}
+
+export function allImageSnapshots() {
+  return sceneImages.map((image) => ({ ...image }));
+}

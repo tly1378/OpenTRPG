@@ -1,13 +1,17 @@
 import { blockedEdgeSet, doorKey, normalizeBlockedEdge } from "../../normalization/edges.mjs";
 import { normalizeSceneDoor } from "../../normalization/doors.mjs";
 import { normalizeSceneRoom } from "../../normalization/rooms.mjs";
-import { broadcastSceneSnapshot } from "../../scene/snapshot.mjs";
+import { broadcastScenePatch } from "../../scene/broadcast.mjs";
 import {
   blockedHorizontalEdges,
   blockedVerticalEdges,
   sceneDoors,
   sceneRooms,
 } from "../../state/index.mjs";
+
+function blockedEdgePatchField(type) {
+  return type === "vertical" ? "blockedVerticalEdges" : "blockedHorizontalEdges";
+}
 
 export function handleBlockedEdgeSet(client, message) {
   if (client.identity.type !== "admin") {
@@ -28,7 +32,15 @@ export function handleBlockedEdgeSet(client, message) {
   }
 
   client.lastSeenAt = Date.now();
-  broadcastSceneSnapshot();
+
+  const patch = {
+    [blockedEdgePatchField(edge.type)]: [{ key: edge.key, blocked: message.blocked }],
+  };
+  if (message.blocked) {
+    patch.doorDeletes = [{ type: edge.type, x: edge.x, y: edge.y }];
+  }
+
+  broadcastScenePatch(patch);
 }
 
 export function handleBlockedEdgesClear(client) {
@@ -40,7 +52,7 @@ export function handleBlockedEdgesClear(client) {
   blockedHorizontalEdges.clear();
   sceneDoors.clear();
   client.lastSeenAt = Date.now();
-  broadcastSceneSnapshot();
+  broadcastScenePatch({ blockedEdgesClear: true });
 }
 
 export function handleDoorSet(client, message) {
@@ -56,7 +68,10 @@ export function handleDoorSet(client, message) {
   blockedEdgeSet(door.type).delete(`${door.x},${door.y}`);
   sceneDoors.set(doorKey(door), door);
   client.lastSeenAt = Date.now();
-  broadcastSceneSnapshot();
+  broadcastScenePatch({
+    doorUpserts: [{ ...door }],
+    [blockedEdgePatchField(door.type)]: [{ key: `${door.x},${door.y}`, blocked: false }],
+  });
 }
 
 export function handleDoorDelete(client, message) {
@@ -71,7 +86,9 @@ export function handleDoorDelete(client, message) {
 
   sceneDoors.delete(doorKey(edge));
   client.lastSeenAt = Date.now();
-  broadcastSceneSnapshot();
+  broadcastScenePatch({
+    doorDeletes: [{ type: edge.type, x: edge.x, y: edge.y }],
+  });
 }
 
 export function handleRoomUpdate(client, message) {
@@ -86,7 +103,14 @@ export function handleRoomUpdate(client, message) {
 
   sceneRooms.set(room.id, room);
   client.lastSeenAt = Date.now();
-  broadcastSceneSnapshot();
+  broadcastScenePatch({
+    roomUpserts: [
+      {
+        ...room,
+        cells: room.cells.map((cell) => ({ ...cell })),
+      },
+    ],
+  });
 }
 
 export function handleRoomDelete(client, message) {
@@ -100,5 +124,5 @@ export function handleRoomDelete(client, message) {
   }
 
   client.lastSeenAt = Date.now();
-  broadcastSceneSnapshot();
+  broadcastScenePatch({ roomDeletes: [roomId] });
 }

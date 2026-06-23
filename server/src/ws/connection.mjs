@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { WebSocketServer } from "ws";
 import { sendJson } from "../lib/send.mjs";
 import { broadcastStatus } from "../clients/status.mjs";
-import { sceneSnapshotPayload } from "../scene/sync.mjs";
+import { sendSceneSnapshot } from "../scene/broadcast.mjs";
 import { clients } from "../state/index.mjs";
 import { routeMessage } from "./router.mjs";
 
@@ -27,7 +27,7 @@ export function attachWebSocketServer(httpServer) {
 
     clients.set(clientId, client);
     sendJson(socket, { type: "ready", clientId, serverTime: now });
-    sendJson(socket, sceneSnapshotPayload(now));
+    sendSceneSnapshot(socket, now);
     broadcastStatus();
 
     socket.on("message", (data) => {

@@ -1,7 +1,7 @@
 import { sendJson } from "../lib/send.mjs";
 import { chatHistoryPayload } from "../chat/messages.mjs";
 import { broadcastStatus } from "../clients/status.mjs";
-import { sceneSnapshotPayload } from "../scene/sync.mjs";
+import { sendSceneSnapshot } from "../scene/broadcast.mjs";
 
 export function handleHello(client, message) {
   if (!message.identity || typeof message.identity !== "object") {
@@ -25,6 +25,6 @@ export function handleHello(client, message) {
     serverTime: client.lastSeenAt,
   });
   broadcastStatus();
-  sendJson(client.socket, sceneSnapshotPayload(client.lastSeenAt));
+  sendSceneSnapshot(client.socket, client.lastSeenAt);
   sendJson(client.socket, chatHistoryPayload(client.lastSeenAt, client));
 }

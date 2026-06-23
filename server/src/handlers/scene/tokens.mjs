@@ -2,12 +2,13 @@ import { randomUUID } from "node:crypto";
 import { syncClientIdentityForToken } from "../../clients/identity.mjs";
 import { canControlToken } from "../../clients/permissions.mjs";
 import { pushChatMessage } from "../../chat/messages.mjs";
+import { broadcastScenePatch } from "../../scene/broadcast.mjs";
 import { isFiniteCell } from "../../lib/utils.mjs";
 import { normalizeTokenAvatarFields } from "../../normalization/images.mjs";
 import { movementDistance } from "../../normalization/movement.mjs";
 import { normalizeSceneToken, normalizeTokenName } from "../../normalization/tokens.mjs";
-import { broadcastSceneSnapshot } from "../../scene/snapshot.mjs";
 import {
+  characterFromToken,
   isCellOccupied,
   syncCharacterFromToken,
 } from "../../scene/sync.mjs";
@@ -31,7 +32,10 @@ export function handleSceneTokenAdd(client, message) {
     sceneTokens[existingTokenIndex] = token;
   }
 
-  broadcastSceneSnapshot();
+  broadcastScenePatch({
+    tokenUpserts: [{ ...token, cell: { ...token.cell } }],
+    characterUpserts: [characterFromToken(token)],
+  });
 }
 
 export function handleSceneTokenDelete(client, message) {
@@ -47,7 +51,7 @@ export function handleSceneTokenDelete(client, message) {
 
   sceneTokens.splice(tokenIndex, 1);
   client.lastSeenAt = Date.now();
-  broadcastSceneSnapshot();
+  broadcastScenePatch({ tokenDeletes: [tokenId] });
 }
 
 export function handleSceneTokenMove(client, message) {
@@ -80,7 +84,10 @@ export function handleSceneTokenMove(client, message) {
 
   const now = Date.now();
   client.lastSeenAt = now;
-  broadcastSceneSnapshot();
+  broadcastScenePatch({
+    tokenUpserts: [{ ...token, cell: { ...token.cell } }],
+    characterUpserts: [characterFromToken(token)],
+  });
   pushChatMessage({
     id: randomUUID(),
     authorId: String(client.identity.id ?? client.clientId),
@@ -113,5 +120,8 @@ export function handleSceneTokenUpdate(client, message) {
   syncCharacterFromToken(token);
   client.lastSeenAt = Date.now();
   syncClientIdentityForToken(token);
-  broadcastSceneSnapshot();
+  broadcastScenePatch({
+    tokenUpserts: [{ ...token, cell: { ...token.cell } }],
+    characterUpserts: [characterFromToken(token)],
+  });
 }

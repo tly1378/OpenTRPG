@@ -48,7 +48,7 @@ import {
 } from "./modules/grid/logicMapUtils";
 import { updateModeControls as applyModeControls } from "./modules/identity/modeControls";
 import { createNetworkSyncAdapter } from "./services/networkSync";
-import { createSceneSnapshotApplier, sceneImageSnapshot, sceneImageSnapshots } from "./services/sceneSnapshotSync";
+import { createSceneSyncApplier, sceneImageSnapshot, sceneImageSnapshots } from "./services/sceneSnapshotSync";
 import { CharacterPanelController, ChatPanelController, LatencyPanelController } from "./controllers/panels";
 import { renderScene } from "./modules/canvas/renderer";
 import type {
@@ -273,11 +273,16 @@ const avatarEditorController = new AvatarEditorController(
   },
 );
 
+let sceneSync: ReturnType<typeof createSceneSyncApplier>;
+
 const networkClient = createNetworkSyncAdapter({
   latencyPanel: latencyPanelController,
   chatPanel: chatPanelController,
   diceRollDisplay: diceRollDisplayController,
-  applySceneSnapshot,
+  sceneSync: {
+    applySnapshot: (snapshot) => sceneSync.applySnapshot(snapshot),
+    applyPatch: (patch) => sceneSync.applyPatch(patch),
+  },
 });
 
 const appContext = createAppContext({
@@ -406,7 +411,7 @@ const appContext = createAppContext({
   },
 });
 
-const sceneSnapshotApplier = createSceneSnapshotApplier({
+sceneSync = createSceneSyncApplier({
   ...appContext.collections,
   ...appContext.state,
   updateNetworkIdentity: appContext.network.updateIdentity,
@@ -674,10 +679,6 @@ function rebuildModeOptions(): void {
 
 function renderIdentityList(): void {
   renderIdentityOptions(identityList, buildIdentities(sceneCharacters), enterIdentity);
-}
-
-function applySceneSnapshot(snapshot: Parameters<typeof sceneSnapshotApplier>[0]): void {
-  sceneSnapshotApplier(snapshot);
 }
 
 function enterIdentity(identity: Identity): void {

@@ -3,7 +3,8 @@ import {
   normalizeSceneImage,
   upsertSceneImage,
 } from "../../normalization/images.mjs";
-import { broadcastSceneSnapshot } from "../../scene/snapshot.mjs";
+import { broadcastScenePatch } from "../../scene/broadcast.mjs";
+import { allImageSnapshots } from "../../scene/sync.mjs";
 import { sceneImages } from "../../state/index.mjs";
 
 export function handleSceneImageAdd(client, message) {
@@ -19,7 +20,7 @@ export function handleSceneImageAdd(client, message) {
   upsertSceneImage(image);
   normalizeImageZIndexes();
   client.lastSeenAt = Date.now();
-  broadcastSceneSnapshot();
+  broadcastScenePatch({ imageUpserts: allImageSnapshots() });
 }
 
 export function handleSceneImageUpdate(client, message) {
@@ -35,7 +36,7 @@ export function handleSceneImageUpdate(client, message) {
   upsertSceneImage(image);
   normalizeImageZIndexes();
   client.lastSeenAt = Date.now();
-  broadcastSceneSnapshot();
+  broadcastScenePatch({ imageUpserts: allImageSnapshots() });
 }
 
 export function handleSceneImageDelete(client, message) {
@@ -52,7 +53,10 @@ export function handleSceneImageDelete(client, message) {
   sceneImages.splice(imageIndex, 1);
   normalizeImageZIndexes();
   client.lastSeenAt = Date.now();
-  broadcastSceneSnapshot();
+  broadcastScenePatch({
+    imageDeletes: [imageId],
+    imageUpserts: allImageSnapshots(),
+  });
 }
 
 export function handleSceneImagesUpdate(client, message) {
@@ -77,5 +81,5 @@ export function handleSceneImagesUpdate(client, message) {
 
   normalizeImageZIndexes();
   client.lastSeenAt = Date.now();
-  broadcastSceneSnapshot();
+  broadcastScenePatch({ imageUpserts: allImageSnapshots() });
 }

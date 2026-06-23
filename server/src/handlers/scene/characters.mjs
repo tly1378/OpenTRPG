@@ -1,7 +1,7 @@
 import { syncClientIdentityForToken } from "../../clients/identity.mjs";
 import { normalizeTokenAvatarFields } from "../../normalization/images.mjs";
 import { normalizeSceneCharacter, normalizeTokenName } from "../../normalization/tokens.mjs";
-import { broadcastSceneSnapshot } from "../../scene/snapshot.mjs";
+import { broadcastScenePatch } from "../../scene/broadcast.mjs";
 import { syncTokenFromCharacter } from "../../scene/sync.mjs";
 import { sceneCharacters, sceneTokens } from "../../state/index.mjs";
 
@@ -17,7 +17,7 @@ export function handleSceneCharacterAdd(client, message) {
 
   sceneCharacters.push(character);
   client.lastSeenAt = Date.now();
-  broadcastSceneSnapshot();
+  broadcastScenePatch({ characterUpserts: [{ ...character }] });
 }
 
 export function handleSceneCharacterUpdate(client, message) {
@@ -41,7 +41,14 @@ export function handleSceneCharacterUpdate(client, message) {
   syncTokenFromCharacter(character);
   client.lastSeenAt = Date.now();
   syncClientIdentityForToken(character);
-  broadcastSceneSnapshot();
+
+  const patch = { characterUpserts: [{ ...character }] };
+  const token = sceneTokens.find((candidate) => candidate.id === character.id);
+  if (token) {
+    patch.tokenUpserts = [{ ...token, cell: { ...token.cell } }];
+  }
+
+  broadcastScenePatch(patch);
 }
 
 export function handleSceneCharacterDelete(client, message) {
@@ -61,5 +68,11 @@ export function handleSceneCharacterDelete(client, message) {
     sceneTokens.splice(tokenIndex, 1);
   }
   client.lastSeenAt = Date.now();
-  broadcastSceneSnapshot();
+
+  const patch = { characterDeletes: [characterId] };
+  if (tokenIndex !== -1) {
+    patch.tokenDeletes = [characterId];
+  }
+
+  broadcastScenePatch(patch);
 }

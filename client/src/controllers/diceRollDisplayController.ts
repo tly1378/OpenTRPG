@@ -191,7 +191,7 @@ type HiddenDiceLog = {
 };
 
 export class DiceRollDisplayController {
-  private readonly tokenOverlays: TokenDiceOverlay[] = [];
+  private tokenOverlays: TokenDiceOverlay[] = [];
   private readonly hiddenLogs: HiddenDiceLog[] = [];
   private seenMessageIds = new Set<string>();
 
