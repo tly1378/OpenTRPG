@@ -1,20 +1,13 @@
 {
   "name": "trpg-infinite-canvas",
   "private": true,
-  "version": "0.1.0",
-  "type": "module",
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "scripts": {
-    "client": "vite --config client/vite.config.ts",
-    "server": "node server/index.mjs",
-    "build": "tsc -p client/tsconfig.json && vite build --config client/vite.config.ts",
-    "preview": "vite preview --config client/vite.config.ts"
-  },
-  "devDependencies": {
-    "typescript": "^5.0.0",
-    "vite": "^7.0.0"
-  },
-  "dependencies": {
-    "lucide": "^1.21.0",
-    "ws": "^8.21.0"
+    "client": "npm run dev -w trpg-client",
+    "server": "npm run start -w trpg-server",
+    "build": "npm run build -w trpg-client"
   }
 }
