@@ -3,7 +3,7 @@ import type { AppMode, EditMode, LogicTool, SceneToken } from "../core/types";
 
 export function installControlEventHandlers(options: {
   elements: {
-    modeSelect: HTMLSelectElement;
+    modeToggleOptions: HTMLButtonElement[];
     editModeSelect: HTMLSelectElement;
     wallModeButton: HTMLButtonElement;
     doorModeButton: HTMLButtonElement;
@@ -97,11 +97,18 @@ export function installControlEventHandlers(options: {
 }): void {
   const { elements, state, actions } = options;
 
-  elements.modeSelect.addEventListener("change", () => {
-    if (state.isLoggedIn()) {
-      actions.setAppMode(elements.modeSelect.value as AppMode);
-    }
-  });
+  for (const option of elements.modeToggleOptions) {
+    option.addEventListener("click", () => {
+      if (!state.isLoggedIn()) {
+        return;
+      }
+
+      const nextMode = option.dataset.mode as AppMode | undefined;
+      if (nextMode) {
+        actions.setAppMode(nextMode);
+      }
+    });
+  }
 
   elements.editModeSelect.addEventListener("change", () => {
     if (state.isAdmin() && state.appMode() === "edit") {

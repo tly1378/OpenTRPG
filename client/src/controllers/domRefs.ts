@@ -11,7 +11,7 @@ import {
   Users,
   createIcons,
 } from "lucide";
-import { mustGetCanvasContext, mustQuery } from "../utilities/dom";
+import { mustGetCanvasContext, mustQuery, mustQueryAll } from "../utilities/dom";
 
 export function queryDomRefs() {
   const canvas = mustQuery<HTMLCanvasElement>("#world-canvas");
@@ -60,8 +60,8 @@ export function queryDomRefs() {
     diceHiddenLogContainer,
     identityScreen: mustQuery<HTMLElement>("#identity-screen"),
     identityList: mustQuery<HTMLDivElement>("#identity-list"),
-    modeSelectLabel: mustQuery<HTMLLabelElement>(".mode-select-label"),
-    modeSelect: mustQuery<HTMLSelectElement>("#mode-select"),
+    modeToggle: mustQuery<HTMLDivElement>("#mode-toggle"),
+    modeToggleOptions: mustQueryAll<HTMLButtonElement>("#mode-toggle .mode-toggle-option"),
     editModeSelectLabel: mustQuery<HTMLLabelElement>(".edit-mode-select-label"),
     editModeSelect: mustQuery<HTMLSelectElement>("#edit-mode-select"),
     uploadButton: mustQuery<HTMLLabelElement>("#upload-button"),

@@ -250,6 +250,72 @@ button {
   opacity: 0.45;
 }
 
+.mode-toggle {
+  position: relative;
+  display: inline-flex;
+  min-height: 38px;
+  align-items: stretch;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 10px;
+  background: rgb(18 24 33 / 86%);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 28%);
+  padding: 3px;
+  pointer-events: auto;
+  backdrop-filter: blur(12px);
+}
+
+.mode-toggle.is-hidden {
+  display: none;
+}
+
+.mode-toggle.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.mode-toggle-slider {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  border-radius: 7px;
+  background: rgb(255 255 255 / 10%);
+  transition: transform 0.2s ease;
+  pointer-events: none;
+}
+
+.mode-toggle[data-active="edit"] .mode-toggle-slider {
+  transform: translateX(100%);
+}
+
+.mode-toggle-option {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #b7c4d4;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.mode-toggle-option.is-active {
+  color: #f7fafc;
+}
+
+.mode-toggle-option:disabled {
+  cursor: not-allowed;
+}
+
+.mode-toggle.is-disabled .mode-toggle-option {
+  pointer-events: none;
+}
+
 .mode-select-label {
   display: inline-flex;
   min-height: 38px;

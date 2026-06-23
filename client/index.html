@@ -19,13 +19,11 @@
       </section>
 
       <header class="toolbar" aria-label="画布工具栏">
-        <label class="mode-select-label">
-          模式
-          <select id="mode-select" class="mode-select">
-            <option value="edit">编辑模式</option>
-            <option value="play">主持模式</option>
-          </select>
-        </label>
+        <div id="mode-toggle" class="mode-toggle" role="group" aria-label="模式" data-active="play">
+          <span class="mode-toggle-slider" aria-hidden="true"></span>
+          <button type="button" class="mode-toggle-option" data-mode="play" aria-pressed="false">主持模式</button>
+          <button type="button" class="mode-toggle-option" data-mode="edit" aria-pressed="false">编辑模式</button>
+        </div>
         <label class="mode-select-label edit-mode-select-label">
           编辑
           <select id="edit-mode-select" class="mode-select">

@@ -34,7 +34,6 @@ import {
   buildIdentities,
   identityLabel,
   rebuildEditModeOptions as rebuildEditModeSelectOptions,
-  rebuildModeOptions as rebuildModeSelectOptions,
   renderIdentityList as renderIdentityOptions,
 } from "./modules/identity/identityUi";
 import {
@@ -82,8 +81,8 @@ const {
   diceHiddenLogContainer,
   identityScreen,
   identityList,
-  modeSelectLabel,
-  modeSelect,
+  modeToggle,
+  modeToggleOptions,
   editModeSelectLabel,
   editModeSelect,
   uploadButton,
@@ -671,7 +670,6 @@ function availableModes(): AppMode[] {
 }
 
 function rebuildModeOptions(): void {
-  rebuildModeSelectOptions(modeSelect, availableModes());
   rebuildEditModeSelectOptions(editModeSelect, ["background", "blocking"]);
 }
 
@@ -1061,8 +1059,8 @@ function updateModeControls(): void {
 
   applyModeControls(
     {
-      modeSelectLabel,
-      modeSelect,
+      modeToggle,
+      modeToggleOptions,
       editModeSelectLabel,
       editModeSelect,
       uploadInput,
@@ -1281,7 +1279,7 @@ installCanvasInteractions({
 
 installControlEventHandlers({
   elements: {
-    modeSelect,
+    modeToggleOptions,
     editModeSelect,
     wallModeButton,
     doorModeButton,

@@ -8,6 +8,16 @@ export function mustQuery<T extends Element>(selector: string): T {
   return element;
 }
 
+export function mustQueryAll<T extends Element>(selector: string): T[] {
+  const elements = [...document.querySelectorAll<T>(selector)];
+
+  if (elements.length === 0) {
+    throw new Error(`页面初始化失败：缺少 ${selector}。`);
+  }
+
+  return elements;
+}
+
 export function mustGetCanvasContext(targetCanvas: HTMLCanvasElement): CanvasRenderingContext2D {
   const context = targetCanvas.getContext("2d");
 

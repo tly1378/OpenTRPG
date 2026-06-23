@@ -1,8 +1,8 @@
 import type { AppMode, EditMode, LogicTool } from "../../core/types";
 
 type ModeControls = {
-  modeSelectLabel: HTMLLabelElement;
-  modeSelect: HTMLSelectElement;
+  modeToggle: HTMLDivElement;
+  modeToggleOptions: HTMLButtonElement[];
   editModeSelectLabel: HTMLLabelElement;
   editModeSelect: HTMLSelectElement;
   uploadInput: HTMLInputElement;
@@ -38,9 +38,16 @@ export function updateModeControls(
   const isEditingBlocking = isEditing && editMode === "blocking";
   const isPlaying = isLoggedIn && appMode === "play";
 
-  controls.modeSelect.value = appMode;
-  controls.modeSelect.disabled = !isLoggedIn || !isAdmin;
-  controls.modeSelectLabel.classList.toggle("is-hidden", !isLoggedIn || !isAdmin);
+  controls.modeToggle.dataset.active = appMode;
+  controls.modeToggle.classList.toggle("is-disabled", !isLoggedIn || !isAdmin);
+  controls.modeToggle.classList.toggle("is-hidden", !isLoggedIn || !isAdmin);
+  for (const option of controls.modeToggleOptions) {
+    const mode = option.dataset.mode as AppMode;
+    const isActive = mode === appMode;
+    option.classList.toggle("is-active", isActive);
+    option.setAttribute("aria-pressed", String(isActive));
+    option.disabled = !isLoggedIn || !isAdmin;
+  }
   controls.editModeSelect.value = editMode;
   controls.editModeSelect.disabled = !isEditing;
   controls.editModeSelectLabel.classList.toggle("is-hidden", appMode !== "edit" || !isLoggedIn || !isAdmin);

@@ -1,11 +1,6 @@
-import type { AppMode, EditMode, Identity, SceneCharacter } from "../../core/types";
+import type { EditMode, Identity, SceneCharacter } from "../../core/types";
 
 export const HOST_IDENTITY: Identity = { type: "admin", id: "host", name: "主持人" };
-
-const MODE_LABELS: Record<AppMode, string> = {
-  edit: "编辑模式",
-  play: "主持模式",
-};
 
 const EDIT_MODE_LABELS: Record<EditMode, string> = {
   background: "美术地图",
@@ -46,17 +41,6 @@ export function renderIdentityList(
       button.addEventListener("click", () => onEnterIdentity(identity));
 
       return button;
-    }),
-  );
-}
-
-export function rebuildModeOptions(modeSelect: HTMLSelectElement, modes: AppMode[]): void {
-  modeSelect.replaceChildren(
-    ...modes.map((mode) => {
-      const option = document.createElement("option");
-      option.value = mode;
-      option.textContent = MODE_LABELS[mode];
-      return option;
     }),
   );
 }
