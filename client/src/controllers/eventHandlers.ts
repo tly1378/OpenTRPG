@@ -19,7 +19,6 @@ export function installControlEventHandlers(options: {
     diceOptionButtons: HTMLButtonElement[];
     diceAdjustButtons: HTMLButtonElement[];
     diceRollButton: HTMLButtonElement;
-    diceClearButton: HTMLButtonElement;
     diceModifierInput: HTMLInputElement;
     diceModifierDecreaseButton: HTMLButtonElement;
     diceModifierIncreaseButton: HTMLButtonElement;
@@ -72,7 +71,6 @@ export function installControlEventHandlers(options: {
     parseDiceButton: (button: HTMLButtonElement) => DiceSides | null;
     changeDieSelection: (sides: DiceSides, delta: number) => void;
     rollSelectedDice: () => void;
-    clearDiceSelection: () => void;
     renderDicePanel: () => void;
     changeDiceModifier: (delta: number) => void;
     resetSelectedImageSize: () => void;
@@ -176,7 +174,6 @@ export function installControlEventHandlers(options: {
   });
 
   elements.diceRollButton.addEventListener("click", actions.rollSelectedDice);
-  elements.diceClearButton.addEventListener("click", () => actions.clearDiceSelection());
   elements.diceModifierInput.addEventListener("input", actions.renderDicePanel);
   elements.diceModifierDecreaseButton.addEventListener("click", () => actions.changeDiceModifier(-1));
   elements.diceModifierIncreaseButton.addEventListener("click", () => actions.changeDiceModifier(1));

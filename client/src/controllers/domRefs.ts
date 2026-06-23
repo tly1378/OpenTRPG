@@ -1,7 +1,7 @@
 import {
   BrickWall,
+  BrushCleaning,
   DoorOpen,
-  Eraser,
   EyeOff,
   LandPlot,
   MessageCircle,
@@ -34,8 +34,8 @@ export function queryDomRefs() {
   createIcons({
     icons: {
       BrickWall,
+      BrushCleaning,
       DoorOpen,
-      Eraser,
       EyeOff,
       LandPlot,
       MessageCircle,
@@ -127,7 +127,6 @@ export function queryDomRefs() {
     diceOptionButtons: Array.from(document.querySelectorAll<HTMLButtonElement>(".dice-option")),
     diceAdjustButtons: Array.from(document.querySelectorAll<HTMLButtonElement>(".dice-adjust-button[data-die]")),
     diceRollButton: mustQuery<HTMLButtonElement>("#dice-roll"),
-    diceClearButton: mustQuery<HTMLButtonElement>("#dice-clear"),
     diceModifierInput: mustQuery<HTMLInputElement>("#dice-modifier"),
     diceModifierDecreaseButton: mustQuery<HTMLButtonElement>("#dice-modifier-decrease"),
     diceModifierIncreaseButton: mustQuery<HTMLButtonElement>("#dice-modifier-increase"),

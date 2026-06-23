@@ -45,7 +45,7 @@
           <span data-lucide="land-plot" aria-hidden="true"></span>
         </button>
         <button id="clear-walls-button" type="button" class="tool-button destructive-button" aria-label="清空" data-tooltip="清空">
-          <span data-lucide="eraser" aria-hidden="true"></span>
+          <span data-lucide="brush-cleaning" aria-hidden="true"></span>
         </button>
         <button id="logic-map-visibility-button" type="button" class="tool-button subtle-button" aria-label="隐藏逻辑地图" aria-pressed="true" data-tooltip="隐藏逻辑地图">
           <span data-lucide="eye-off" aria-hidden="true"></span>
@@ -70,7 +70,6 @@
             <h2>投骰子</h2>
             <button id="dice-focus-label" class="dice-focus-label" type="button" hidden aria-label="切换投骰可见性"></button>
           </div>
-          <button id="dice-clear" class="dice-clear-button" type="button">清空</button>
         </div>
         <div id="dice-options" class="dice-options" aria-label="选择要投掷的骰子">
           <div class="dice-control">
@@ -128,7 +127,9 @@
             <p class="panel-eyebrow">聊天</p>
             <h2>聊天栏</h2>
           </div>
-          <button id="chat-close-button" class="chat-close-button" type="button" aria-label="关闭聊天">关闭</button>
+          <button id="chat-close-button" class="chat-close-button" type="button" aria-label="关闭聊天">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+          </button>
         </div>
         <div id="chat-message-list" class="chat-message-list" aria-live="polite">
           <div class="chat-empty">投骰结果会显示在这里。</div>
@@ -141,7 +142,9 @@
             <p class="panel-eyebrow">角色</p>
             <h2>角色管理</h2>
           </div>
-          <button id="character-close-button" class="chat-close-button" type="button" aria-label="关闭角色管理">关闭</button>
+          <button id="character-close-button" class="chat-close-button" type="button" aria-label="关闭角色管理">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+          </button>
         </div>
         <button id="add-character-button" type="button" class="primary-panel-action">添加角色</button>
         <div id="character-list" class="character-list" aria-live="polite">
@@ -190,7 +193,9 @@
             <div>
               <p class="panel-eyebrow">角色检视</p>
             </div>
-            <button id="close-token-inspector" class="chat-close-button" type="button" aria-label="关闭角色检视">关闭</button>
+            <button id="close-token-inspector" class="chat-close-button" type="button" aria-label="关闭角色检视">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+            </button>
           </div>
           <form id="token-selection-form" class="token-selection-form">
             <div id="token-name-display" class="token-name-display">

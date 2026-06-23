@@ -393,7 +393,6 @@ button {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding-right: 44px;
 }
 
 .dice-panel-title-row {
@@ -441,27 +440,6 @@ button {
 
 .dice-focus-label.is-toggle:hover,
 .dice-focus-label.is-toggle:focus-visible {
-  color: #edf4fb;
-  outline: none;
-}
-
-.dice-clear-button {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  border: 1px solid rgb(255 255 255 / 12%);
-  border-radius: 999px;
-  background: rgb(255 255 255 / 7%);
-  color: #b7c4d4;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 800;
-  padding: 5px 9px;
-}
-
-.dice-clear-button:hover,
-.dice-clear-button:focus-visible {
-  border-color: rgb(104 191 255 / 70%);
   color: #edf4fb;
   outline: none;
 }
@@ -990,14 +968,22 @@ button {
 }
 
 .chat-close-button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 999px;
   background: rgb(255 255 255 / 7%);
   color: #b7c4d4;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 800;
-  padding: 6px 10px;
+  padding: 0;
+}
+
+.chat-close-button svg {
+  width: 16px;
+  height: 16px;
 }
 
 .chat-close-button:hover,
