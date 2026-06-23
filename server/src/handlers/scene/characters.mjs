@@ -1,0 +1,65 @@
+import { syncClientIdentityForToken } from "../../clients/identity.mjs";
+import { normalizeTokenAvatarFields } from "../../normalization/images.mjs";
+import { normalizeSceneCharacter, normalizeTokenName } from "../../normalization/tokens.mjs";
+import { broadcastSceneSnapshot } from "../../scene/snapshot.mjs";
+import { syncTokenFromCharacter } from "../../scene/sync.mjs";
+import { sceneCharacters, sceneTokens } from "../../state/index.mjs";
+
+export function handleSceneCharacterAdd(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  const character = normalizeSceneCharacter(message.character);
+  if (!character || sceneCharacters.some((candidate) => candidate.id === character.id)) {
+    return;
+  }
+
+  sceneCharacters.push(character);
+  client.lastSeenAt = Date.now();
+  broadcastSceneSnapshot();
+}
+
+export function handleSceneCharacterUpdate(client, message) {
+  const incomingCharacter = message.character;
+  if (!incomingCharacter || typeof incomingCharacter !== "object") {
+    return;
+  }
+
+  const character = sceneCharacters.find((candidate) => candidate.id === String(incomingCharacter.id ?? ""));
+  const name = normalizeTokenName(incomingCharacter.name);
+  const isAdmin = client.identity.type === "admin";
+  if (!character || !name || (!isAdmin && client.identity.id !== character.id)) {
+    return;
+  }
+
+  character.name = name;
+  Object.assign(character, normalizeTokenAvatarFields(incomingCharacter));
+  if (isAdmin) {
+    character.isNpc = incomingCharacter.isNpc === true;
+  }
+  syncTokenFromCharacter(character);
+  client.lastSeenAt = Date.now();
+  syncClientIdentityForToken(character);
+  broadcastSceneSnapshot();
+}
+
+export function handleSceneCharacterDelete(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  const characterId = String(message.characterId ?? "");
+  const characterIndex = sceneCharacters.findIndex((candidate) => candidate.id === characterId);
+  if (characterIndex === -1) {
+    return;
+  }
+
+  sceneCharacters.splice(characterIndex, 1);
+  const tokenIndex = sceneTokens.findIndex((candidate) => candidate.id === characterId);
+  if (tokenIndex !== -1) {
+    sceneTokens.splice(tokenIndex, 1);
+  }
+  client.lastSeenAt = Date.now();
+  broadcastSceneSnapshot();
+}
