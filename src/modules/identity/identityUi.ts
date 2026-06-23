@@ -15,11 +15,13 @@ const EDIT_MODE_LABELS: Record<EditMode, string> = {
 export function buildIdentities(characters: SceneCharacter[]): Identity[] {
   return [
     HOST_IDENTITY,
-    ...characters.map((character) => ({
-      type: "player" as const,
-      id: character.id,
-      name: character.name,
-    })),
+    ...characters
+      .filter((character) => !character.isNpc)
+      .map((character) => ({
+        type: "player" as const,
+        id: character.id,
+        name: character.name,
+      })),
   ];
 }
 

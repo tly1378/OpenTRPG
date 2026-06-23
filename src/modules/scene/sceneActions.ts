@@ -39,11 +39,12 @@ export function createSceneImage(
   };
 }
 
-export function createSceneCharacter(tokenIndex: number): SceneCharacter {
+export function createSceneCharacter(tokenIndex: number, isNpc = false): SceneCharacter {
   return {
     id: crypto.randomUUID(),
-    name: `P${tokenIndex}`,
+    name: isNpc ? `N${tokenIndex}` : `P${tokenIndex}`,
     color: TOKEN_COLORS[(tokenIndex - 1) % TOKEN_COLORS.length],
+    isNpc: isNpc || undefined,
   };
 }
 

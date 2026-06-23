@@ -58,6 +58,21 @@ export class CharacterTokenController {
     this.network.sendCharacterAdded(character);
   }
 
+  addNpcCharacter(): void {
+    if (!this.queries.isAdmin()) {
+      return;
+    }
+
+    const tokenIndex = this.state.getNextTokenIndex();
+    this.state.setNextTokenIndex(tokenIndex + 1);
+    const character = createSceneCharacter(tokenIndex, true);
+
+    this.state.sceneCharacters.push(character);
+    this.actions.renderCharacterPanel();
+    this.actions.openTokenInspector(character.id);
+    this.network.sendCharacterAdded(character);
+  }
+
   placeCharacterAtCell(characterId: string, cell: Cell): void {
     if (
       !this.queries.isAdmin() ||
@@ -195,6 +210,24 @@ export class CharacterTokenController {
     this.actions.renderCharacterPanel();
     this.actions.updateTokenInspector();
     this.network.sendCharacterUpdated(token);
+  }
+
+  updateCharacterIsNpc(isNpc: boolean): void {
+    if (!this.queries.isAdmin()) {
+      return;
+    }
+
+    const character = this.queries.getInspectedCharacter();
+    if (!character || Boolean(character.isNpc) === isNpc) {
+      return;
+    }
+
+    character.isNpc = isNpc || undefined;
+    this.actions.renderIdentityList();
+    this.actions.renderCharacterPanel();
+    this.syncTokenInstanceFromCharacter(character);
+    this.actions.updateTokenInspector();
+    this.network.sendCharacterUpdated(character);
   }
 
   private syncTokenInstanceFromCharacter(character: SceneCharacter): void {

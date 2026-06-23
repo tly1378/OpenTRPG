@@ -190,6 +190,123 @@ export class ChatPanelController {
   }
 }
 
+function createCharacterRow(options: {
+  character: SceneCharacter;
+  tokens: SceneToken[];
+  avatarImages: Map<string, { src: string; image: HTMLImageElement }>;
+  isAdmin: boolean;
+  deleteCharacter: (characterId: string) => void;
+  openTokenInspector: (characterId: string) => void;
+}): HTMLDivElement {
+  const { character, tokens, avatarImages, isAdmin, deleteCharacter, openTokenInspector } = options;
+  const row = document.createElement("div");
+  const entry = document.createElement("button");
+  const avatar = document.createElement("span");
+  const text = document.createElement("span");
+  const name = document.createElement("span");
+  const status = document.createElement("span");
+  const deleteButton = document.createElement("button");
+  const isOnMap = tokens.some((token) => token.id === character.id);
+  const avatarImage = avatarImages.get(character.id);
+
+  row.className = "character-row";
+  row.classList.toggle("is-on-map", isOnMap);
+  row.classList.toggle("is-npc", Boolean(character.isNpc));
+  entry.type = "button";
+  entry.className = "character-entry";
+  entry.draggable = true;
+  entry.dataset.characterId = character.id;
+  avatar.className = "character-avatar";
+  avatar.style.setProperty("--character-color", character.color);
+  text.className = "character-text";
+  name.className = "character-name";
+  status.className = "character-status";
+  name.textContent = character.name;
+  status.textContent = isOnMap ? "已在地图上" : "可拖入地图";
+
+  if (avatarImage) {
+    const image = document.createElement("img");
+    const diameter = 100;
+    const radius = diameter / 2;
+    const scale = character.avatarScale ?? 1;
+    const offsetX = (character.avatarOffsetX ?? 0) * radius;
+    const offsetY = (character.avatarOffsetY ?? 0) * radius;
+    const ratio = avatarImage.image.naturalWidth / avatarImage.image.naturalHeight || 1;
+    const width = ratio >= 1 ? diameter * scale * ratio : diameter * scale;
+    const height = ratio >= 1 ? diameter * scale : (diameter * scale) / ratio;
+
+    image.src = avatarImage.src;
+    image.alt = `${character.name} 头像`;
+    image.style.width = `${width}%`;
+    image.style.height = `${height}%`;
+    image.style.left = `${50 + offsetX}%`;
+    image.style.top = `${50 + offsetY}%`;
+    avatar.append(image);
+  } else {
+    avatar.textContent = character.name.trim().slice(0, 1).toUpperCase() || "P";
+  }
+
+  deleteButton.type = "button";
+  deleteButton.className = "delete-character-button";
+  deleteButton.setAttribute("aria-label", `删除角色 ${character.name}`);
+  deleteButton.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Z"/><path d="M6 9h12l-1 12H7L6 9Zm4 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z"/></svg>';
+  deleteButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    deleteCharacter(character.id);
+  });
+
+  entry.addEventListener("click", () => openTokenInspector(character.id));
+  entry.addEventListener("dragstart", (event) => {
+    if (!event.dataTransfer || !isAdmin) {
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData("application/x-trpg-character-id", character.id);
+    event.dataTransfer.setData("text/plain", character.id);
+  });
+
+  text.append(name, status);
+  entry.append(avatar, text);
+  row.append(entry, deleteButton);
+  return row;
+}
+
+function renderCharacterList(
+  list: HTMLDivElement,
+  characters: SceneCharacter[],
+  emptyText: string,
+  options: {
+    tokens: SceneToken[];
+    avatarImages: Map<string, { src: string; image: HTMLImageElement }>;
+    isAdmin: boolean;
+    deleteCharacter: (characterId: string) => void;
+    openTokenInspector: (characterId: string) => void;
+  },
+): void {
+  if (characters.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "character-empty";
+    empty.textContent = emptyText;
+    list.replaceChildren(empty);
+    return;
+  }
+
+  list.replaceChildren(
+    ...characters.map((character) =>
+      createCharacterRow({
+        character,
+        tokens: options.tokens,
+        avatarImages: options.avatarImages,
+        isAdmin: options.isAdmin,
+        deleteCharacter: options.deleteCharacter,
+        openTokenInspector: options.openTokenInspector,
+      }),
+    ),
+  );
+}
+
 export class CharacterPanelController {
   private panelOpen = false;
 
@@ -199,6 +316,9 @@ export class CharacterPanelController {
       toggleButton: HTMLButtonElement;
       addButton: HTMLButtonElement;
       list: HTMLDivElement;
+      npcSection: HTMLElement;
+      addNpcButton: HTMLButtonElement;
+      npcList: HTMLDivElement;
     },
     private readonly state: {
       canShowCharacters: () => boolean;
@@ -229,7 +349,7 @@ export class CharacterPanelController {
       this.panelOpen = false;
     }
 
-    const { panel, toggleButton, addButton, list } = this.elements;
+    const { panel, toggleButton, addButton, list, npcSection, addNpcButton, npcList } = this.elements;
     toggleButton.classList.toggle("is-hidden", !canShowCharacters);
     toggleButton.classList.toggle("is-active", canShowCharacters && this.panelOpen);
     toggleButton.disabled = !canShowCharacters;
@@ -239,93 +359,26 @@ export class CharacterPanelController {
     panel.classList.toggle("is-open", canShowCharacters && this.panelOpen);
     panel.setAttribute("aria-hidden", String(!canShowCharacters || !this.panelOpen));
     addButton.disabled = !canShowCharacters;
+    addNpcButton.disabled = !canShowCharacters;
+    npcSection.hidden = !canShowCharacters;
 
     const characters = this.state.characters();
-    if (characters.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "character-empty";
-      empty.textContent = "还没有角色。";
-      list.replaceChildren(empty);
-      return;
-    }
-
+    const playerCharacters = characters.filter((character) => !character.isNpc);
+    const npcCharacters = characters.filter((character) => character.isNpc);
     const tokens = this.state.tokens();
     const avatarImages = this.state.avatarImages();
-    const elements = characters.map((character) => {
-      const row = document.createElement("div");
-      const entry = document.createElement("button");
-      const avatar = document.createElement("span");
-      const text = document.createElement("span");
-      const name = document.createElement("span");
-      const status = document.createElement("span");
-      const deleteButton = document.createElement("button");
-      const isOnMap = tokens.some((token) => token.id === character.id);
-      const avatarImage = avatarImages.get(character.id);
+    const isAdmin = this.state.isAdmin();
+    const listOptions = {
+      tokens,
+      avatarImages,
+      isAdmin,
+      deleteCharacter: this.actions.deleteCharacter,
+      openTokenInspector: this.actions.openTokenInspector,
+    };
 
-      row.className = "character-row";
-      row.classList.toggle("is-on-map", isOnMap);
-      entry.type = "button";
-      entry.className = "character-entry";
-      entry.draggable = true;
-      entry.dataset.characterId = character.id;
-      avatar.className = "character-avatar";
-      avatar.style.setProperty("--character-color", character.color);
-      text.className = "character-text";
-      name.className = "character-name";
-      status.className = "character-status";
-      name.textContent = character.name;
-      status.textContent = isOnMap ? "已在地图上" : "可拖入地图";
+    renderCharacterList(list, playerCharacters, "还没有玩家角色。", listOptions);
+    renderCharacterList(npcList, npcCharacters, "还没有 NPC。", listOptions);
 
-      if (avatarImage) {
-        const image = document.createElement("img");
-        const diameter = 100;
-        const radius = diameter / 2;
-        const scale = character.avatarScale ?? 1;
-        const offsetX = (character.avatarOffsetX ?? 0) * radius;
-        const offsetY = (character.avatarOffsetY ?? 0) * radius;
-        const ratio = avatarImage.image.naturalWidth / avatarImage.image.naturalHeight || 1;
-        const width = ratio >= 1 ? diameter * scale * ratio : diameter * scale;
-        const height = ratio >= 1 ? diameter * scale : (diameter * scale) / ratio;
-
-        image.src = avatarImage.src;
-        image.alt = `${character.name} 头像`;
-        image.style.width = `${width}%`;
-        image.style.height = `${height}%`;
-        image.style.left = `${50 + offsetX}%`;
-        image.style.top = `${50 + offsetY}%`;
-        avatar.append(image);
-      } else {
-        avatar.textContent = character.name.trim().slice(0, 1).toUpperCase() || "P";
-      }
-
-      deleteButton.type = "button";
-      deleteButton.className = "delete-character-button";
-      deleteButton.setAttribute("aria-label", `删除角色 ${character.name}`);
-      deleteButton.innerHTML =
-        '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Z"/><path d="M6 9h12l-1 12H7L6 9Zm4 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z"/></svg>';
-      deleteButton.addEventListener("click", (event) => {
-        event.stopPropagation();
-        this.actions.deleteCharacter(character.id);
-      });
-
-      entry.addEventListener("click", () => this.actions.openTokenInspector(character.id));
-      entry.addEventListener("dragstart", (event) => {
-        if (!event.dataTransfer || !this.state.isAdmin()) {
-          return;
-        }
-
-        event.dataTransfer.effectAllowed = "copy";
-        event.dataTransfer.setData("application/x-trpg-character-id", character.id);
-        event.dataTransfer.setData("text/plain", character.id);
-      });
-
-      text.append(name, status);
-      entry.append(avatar, text);
-      row.append(entry, deleteButton);
-      return row;
-    });
-
-    list.replaceChildren(...elements);
     createIcons({
       icons: { Trash2 },
       nameAttr: "data-lucide",

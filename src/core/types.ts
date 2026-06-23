@@ -63,6 +63,7 @@ export type SceneCharacter = {
   id: string;
   name: string;
   color: string;
+  isNpc?: boolean;
   avatarSrc?: string;
   avatarScale?: number;
   avatarOffsetX?: number;

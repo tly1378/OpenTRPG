@@ -285,6 +285,7 @@ function normalizeSceneCharacter(character) {
     id,
     name,
     color,
+    isNpc: character.isNpc === true,
     ...normalizeTokenAvatarFields(character),
   };
 }
@@ -501,12 +502,16 @@ function handleSceneCharacterUpdate(client, message) {
 
   const character = sceneCharacters.find((candidate) => candidate.id === String(incomingCharacter.id ?? ""));
   const name = normalizeTokenName(incomingCharacter.name);
-  if (!character || !name || (client.identity.type !== "admin" && client.identity.id !== character.id)) {
+  const isAdmin = client.identity.type === "admin";
+  if (!character || !name || (!isAdmin && client.identity.id !== character.id)) {
     return;
   }
 
   character.name = name;
   Object.assign(character, normalizeTokenAvatarFields(incomingCharacter));
+  if (isAdmin) {
+    character.isNpc = incomingCharacter.isNpc === true;
+  }
   syncTokenFromCharacter(character);
   client.lastSeenAt = Date.now();
   syncClientIdentityForToken(character);
@@ -624,6 +629,10 @@ function handleSceneImagesUpdate(client, message) {
 }
 
 function canControlToken(client, token) {
+  if (token.isNpc) {
+    return client.identity.type === "admin";
+  }
+
   return client.identity.type === "admin" || client.identity.id === token.id;
 }
 

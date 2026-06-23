@@ -101,6 +101,9 @@ const {
   characterCloseButton,
   addCharacterButton,
   characterList,
+  npcCharacterSection,
+  addNpcButton,
+  npcCharacterList,
   selectionPanel,
   selectionEyebrow,
   selectionTitle,
@@ -124,6 +127,8 @@ const {
   editAvatarButton,
   resetAvatarAdjustmentButton,
   tokenPanelHelp,
+  tokenNpcTypeControls,
+  tokenNpcTypeInput,
   tokenInspectorOverlay,
   closeTokenInspectorButton,
   tokenInstanceActions,
@@ -216,6 +221,9 @@ const characterPanelController = new CharacterPanelController(
     toggleButton: characterToggleButton,
     addButton: addCharacterButton,
     list: characterList,
+    npcSection: npcCharacterSection,
+    addNpcButton,
+    npcList: npcCharacterList,
   },
   {
     canShowCharacters: isAdmin,
@@ -562,6 +570,10 @@ function shouldShowLogicMap(): boolean {
 }
 
 function canControlToken(token: SceneCharacter): boolean {
+  if (token.isNpc) {
+    return currentIdentity?.type === "admin";
+  }
+
   return currentIdentity?.type === "admin" || currentIdentity?.id === token.id;
 }
 
@@ -813,6 +825,8 @@ function updateTokenInspector(): void {
       tokenInstanceActions,
       deleteTokenInstanceButton,
       tokenPanelHelp,
+      tokenNpcTypeControls,
+      tokenNpcTypeInput,
     },
     character,
     tokenInstance: getInspectedTokenInstance(),
@@ -1004,6 +1018,14 @@ function updateModeControls(): void {
 
 function addCharacter(): void {
   characterTokenController.addCharacter();
+}
+
+function addNpcCharacter(): void {
+  characterTokenController.addNpcCharacter();
+}
+
+function updateCharacterIsNpc(isNpc: boolean): void {
+  characterTokenController.updateCharacterIsNpc(isNpc);
 }
 
 function placeCharacterAtCell(characterId: string, cell: Cell): void {
@@ -1223,9 +1245,11 @@ installControlEventHandlers({
     characterToggleButton,
     characterCloseButton,
     addCharacterButton,
+    addNpcButton,
     closeTokenInspectorButton,
     tokenInspectorOverlay,
     deleteTokenInstanceButton,
+    tokenNpcTypeInput,
   },
   state: {
     isLoggedIn,
@@ -1271,6 +1295,8 @@ installControlEventHandlers({
     setChatPanelOpen,
     setCharacterPanelOpen,
     addCharacter,
+    addNpcCharacter,
+    updateCharacterIsNpc,
     closeTokenInspector,
     deleteToken,
   },

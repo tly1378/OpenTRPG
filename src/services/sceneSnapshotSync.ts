@@ -114,7 +114,8 @@ export function createSceneSnapshotApplier(context: {
 
     const currentIdentity = context.getCurrentIdentity();
     const shouldExitDeletedIdentity =
-      currentIdentity?.type === "player" && !nextCharacters.some((character) => character.id === currentIdentity.id);
+      currentIdentity?.type === "player" &&
+      !nextCharacters.some((character) => character.id === currentIdentity.id && !character.isNpc);
     const animations = buildRemoteMoveAnimations({
       nextTokens,
       previousTokens,

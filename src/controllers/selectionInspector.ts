@@ -84,6 +84,8 @@ export function renderTokenInspector(options: {
     tokenInstanceActions: HTMLDivElement;
     deleteTokenInstanceButton: HTMLButtonElement;
     tokenPanelHelp: HTMLParagraphElement;
+    tokenNpcTypeControls: HTMLDivElement;
+    tokenNpcTypeInput: HTMLInputElement;
   };
   character: SceneCharacter | null;
   tokenInstance: SceneToken | null;
@@ -115,7 +117,17 @@ export function renderTokenInspector(options: {
   elements.resetAvatarAdjustmentButton.disabled = !options.canControlToken;
   elements.tokenInstanceActions.hidden = !options.isAdmin || !options.tokenInstance;
   elements.deleteTokenInstanceButton.disabled = !options.isAdmin || !options.tokenInstance;
-  elements.tokenPanelHelp.textContent = options.canControlToken ? "修改后会同步到所有客户端。" : "只有主持人或该角色玩家可以修改姓名。";
+  elements.tokenNpcTypeControls.hidden = !options.isAdmin;
+  elements.tokenNpcTypeInput.checked = Boolean(character.isNpc);
+  elements.tokenNpcTypeInput.disabled = !options.isAdmin;
+
+  if (character.isNpc && !options.canControlToken) {
+    elements.tokenPanelHelp.textContent = "NPC 只能由主持人操控。";
+  } else if (options.canControlToken) {
+    elements.tokenPanelHelp.textContent = "修改后会同步到所有客户端。";
+  } else {
+    elements.tokenPanelHelp.textContent = "只有主持人或该角色玩家可以修改姓名。";
+  }
 
   if (document.activeElement !== elements.tokenNameInput || !options.isEditingTokenName) {
     elements.tokenNameInput.value = character.name;

@@ -146,7 +146,16 @@
         <div id="character-list" class="character-list" aria-live="polite">
           <div class="character-empty">还没有角色。</div>
         </div>
-        <p class="panel-help">管理员可将角色拖入地图生成棋子；删除角色会同时移除该角色的棋子。</p>
+        <section id="npc-character-section" class="character-section">
+          <div class="character-section-header">
+            <span class="character-section-title">NPC</span>
+            <button id="add-npc-button" type="button" class="secondary-panel-action">添加 NPC</button>
+          </div>
+          <div id="npc-character-list" class="character-list" aria-live="polite">
+            <div class="character-empty">还没有 NPC。</div>
+          </div>
+        </section>
+        <p class="panel-help">管理员可将角色拖入地图生成棋子；NPC 无法登录，仅主持人可操控。</p>
       </aside>
 
       <aside id="selection-panel" class="selection-panel" aria-hidden="true">
@@ -196,6 +205,12 @@
               <span id="token-name-value" class="token-name-value">角色</span>
               <input id="token-name-input" class="token-name-inline-input" type="text" maxlength="24" autocomplete="off" hidden />
               <button id="edit-token-name" class="icon-panel-action" type="button" aria-label="编辑角色姓名">✎</button>
+            </div>
+            <div id="token-npc-type-controls" class="token-npc-type-controls" hidden>
+              <label class="door-state-toggle">
+                <input id="token-npc-type-input" type="checkbox" />
+                <span>NPC 角色（无法登录，仅主持人可操控）</span>
+              </label>
             </div>
             <div class="panel-section">
               <div class="panel-section-title">角色头像</div>
