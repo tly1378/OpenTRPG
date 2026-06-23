@@ -1,4 +1,4 @@
-# TRPG Infinite Canvas
+# OpenTRPG
 
 一个用于构建类 FVTT 跑团工具的前端原型。项目当前重点是地图编辑、角色移动、权限控制，以及基础的 WebSocket 在线状态同步。
 
@@ -18,10 +18,17 @@
 - Node.js 18 或更高版本。
 - npm。
 
-首次运行前安装依赖：
+首次运行前在仓库根目录安装依赖（会同时安装 `client` 与 `server` 两个子项目）：
 
 ```bash
 npm install
+```
+
+也可以在各自目录单独安装：
+
+```bash
+cd client && npm install
+cd server && npm install
 ```
 
 ## 本地开发
@@ -121,18 +128,23 @@ VITE_TRPG_SERVER_URL=ws://localhost:8790
 npm run build
 ```
 
-本命令会先运行 TypeScript 检查，再执行 Vite 生产构建。
+构建产物输出到 `client/dist/`。
 
 ## 项目结构
 
-仓库按客户端与服务端拆分。前端在 `client/` 下，由 Vite 提供开发与构建；WebSocket 同步服务在 `server/` 下独立运行。
+仓库是 npm workspaces 单体仓库：`client/` 与 `server/` 各自拥有独立的 `package.json` 和依赖，根目录 `package.json` 仅负责统一脚本入口。
 
 ```text
+package.json           workspaces 根配置；npm run client / server / build
+package-lock.json      锁定两个子项目的依赖版本
+
 client/
+  package.json         前端依赖：vite、typescript、lucide
   index.html           Vite 入口页面
   vite.config.ts       前端构建配置
   tsconfig.json        客户端 TypeScript 配置
   public/              静态资源（构建时原样复制）
+  dist/                生产构建输出（git 忽略）
   src/
     main.ts            应用入口：依赖装配、状态编排和启动流程
     styles.css         页面布局和 UI 样式
@@ -157,6 +169,7 @@ client/
     services/          WebSocket 客户端与场景同步适配
 
 server/
+  package.json         服务端依赖：ws
   index.mjs            WebSocket 同步服务器和健康检查接口
 ```
 
