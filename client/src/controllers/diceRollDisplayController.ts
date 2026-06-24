@@ -326,11 +326,71 @@ export class DiceRollDisplayController {
 
   private showBroadcastLog(message: DiceChatMessage): void {
     const element = this.createBroadcastLogEntry(message);
-    this.hiddenLogContainer.append(element);
+    element.classList.add("is-entering");
+    this.animateLogStackEntry(element);
+  }
+
+  private animateLogStackEntry(newElement: HTMLElement): void {
+    const container = this.hiddenLogContainer;
+    const existingEntries = [...container.children] as HTMLElement[];
+    const firstPositions = new Map(
+      existingEntries.map((entry) => [entry, entry.getBoundingClientRect().top]),
+    );
+
+    container.append(newElement);
     this.hiddenLogs.push({
-      element,
+      element: newElement,
       createdAt: performance.now(),
     });
+
+    for (const entry of existingEntries) {
+      const firstTop = firstPositions.get(entry);
+      if (firstTop === undefined) {
+        continue;
+      }
+
+      const deltaY = firstTop - entry.getBoundingClientRect().top;
+      if (Math.abs(deltaY) < 0.5) {
+        continue;
+      }
+
+      entry.style.transform = `translateY(${deltaY}px)`;
+      entry.style.transition = "none";
+    }
+
+    void container.offsetHeight;
+
+    for (const entry of existingEntries) {
+      if (!entry.style.transform) {
+        continue;
+      }
+
+      entry.style.transition = "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)";
+      entry.style.transform = "";
+
+      const cleanup = (event: TransitionEvent): void => {
+        if (event.propertyName !== "transform") {
+          return;
+        }
+
+        entry.style.transition = "";
+        entry.style.transform = "";
+        entry.removeEventListener("transitionend", cleanup);
+      };
+      entry.addEventListener("transitionend", cleanup);
+    }
+
+    newElement.addEventListener(
+      "animationend",
+      (event: AnimationEvent) => {
+        if (event.animationName !== "dice-log-entry-in") {
+          return;
+        }
+
+        newElement.classList.remove("is-entering");
+      },
+      { once: true },
+    );
   }
 
   private createBroadcastLogEntry(message: DiceChatMessage): HTMLElement {
