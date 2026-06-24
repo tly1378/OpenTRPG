@@ -67,6 +67,7 @@ import type {
   MovingToken,
   SceneDoor,
   SceneCharacter,
+  CharacterStatsUpdateScope,
   SceneImage,
   SceneImageSnapshot,
   SceneItemDefinition,
@@ -179,13 +180,19 @@ const {
   tokenPanelHelp,
   tokenNpcTypeControls,
   tokenNpcTypeInput,
+  tokenInspectorTabStats,
   tokenInspectorTabProfile,
   tokenInspectorTabBackpack,
+  tokenInspectorTabBackground,
+  tokenStatsPanel,
+  tokenStatsList,
   tokenProfilePanel,
   tokenBackpackPanel,
   tokenBackpackTitle,
   tokenBackpackList,
   tokenBackpackHelp,
+  tokenBackgroundPanel,
+  tokenBackgroundList,
   tokenInspectorOverlay,
   closeTokenInspectorButton,
   tokenInstanceActions,
@@ -338,6 +345,7 @@ const characterPanelController = new CharacterPanelController(
   },
   {
     deleteCharacter,
+    duplicateCharacter,
     openTokenInspector,
   },
 );
@@ -528,6 +536,13 @@ const appContext = createAppContext({
     updateIdentity: (identity: Identity) => networkClient.updateIdentity(identity),
     sendCharacterAdded: (character: SceneCharacter) => networkClient.sendCharacterAdded(character),
     sendCharacterUpdated: (character: SceneCharacter) => networkClient.sendCharacterUpdated(character),
+    sendCharacterStatsUpdated: (
+      characterId: string,
+      statCategories: SceneCharacter["statCategories"],
+      scope: CharacterStatsUpdateScope,
+    ) => networkClient.sendCharacterStatsUpdated(characterId, statCategories, scope),
+    sendCharacterBackgroundUpdated: (characterId: string, backgroundEntries: SceneCharacter["backgroundEntries"]) =>
+      networkClient.sendCharacterBackgroundUpdated(characterId, backgroundEntries),
     sendCharacterDeleted: (characterId: string) => networkClient.sendCharacterDeleted(characterId),
     sendTokenAdded: (token: SceneToken) => networkClient.sendTokenAdded(token),
     sendTokenDeleted: (tokenId: string) => networkClient.sendTokenDeleted(tokenId),
@@ -576,6 +591,7 @@ const characterTokenController = new CharacterTokenController(
     isAdmin,
     canControlToken,
     getInspectedCharacter,
+    getStatsUpdateScope,
   },
   {
     tokenNameInput,
@@ -1084,6 +1100,26 @@ function canControlToken(token: SceneCharacter): boolean {
   return currentIdentity?.type === "admin" || currentIdentity?.id === token.id;
 }
 
+function getStatsUpdateScope(): CharacterStatsUpdateScope | null {
+  if (!isAdmin()) {
+    return null;
+  }
+
+  return appMode === "edit" ? "structure" : "values";
+}
+
+function canEditStatStructure(): boolean {
+  return getStatsUpdateScope() === "structure";
+}
+
+function canEditStatValues(): boolean {
+  return getStatsUpdateScope() === "values";
+}
+
+function canEditBackground(): boolean {
+  return canEditStatStructure();
+}
+
 function canInspectToken(): boolean {
   return isLoggedIn();
 }
@@ -1346,13 +1382,19 @@ function updateTokenInspector(): void {
       tokenPanelHelp,
       tokenNpcTypeControls,
       tokenNpcTypeInput,
+      tokenInspectorTabStats,
       tokenInspectorTabProfile,
       tokenInspectorTabBackpack,
+      tokenInspectorTabBackground,
+      tokenStatsPanel,
+      tokenStatsList,
       tokenProfilePanel,
       tokenBackpackPanel,
       tokenBackpackTitle,
       tokenBackpackList,
       tokenBackpackHelp,
+      tokenBackgroundPanel,
+      tokenBackgroundList,
     },
     character,
     tokenInstance: getInspectedTokenInstance(),
@@ -1366,6 +1408,25 @@ function updateTokenInspector(): void {
     canInspectToken: canInspectToken(),
     canControlToken: canEditToken,
     isAdmin: isAdmin(),
+    canEditStatStructure: canEditStatStructure(),
+    canEditStatValues: canEditStatValues(),
+    canEditBackground: canEditBackground(),
+    onAddCharacterStatCategory: () => characterTokenController.addCharacterStatCategory(),
+    onDeleteCharacterStatCategory: (categoryId) => characterTokenController.deleteCharacterStatCategory(categoryId),
+    onUpdateCharacterStatCategoryName: (categoryId, name) =>
+      characterTokenController.updateCharacterStatCategoryName(categoryId, name),
+    onAddCharacterStat: (categoryId) => characterTokenController.addCharacterStat(categoryId),
+    onDeleteCharacterStat: (categoryId, statId) => characterTokenController.deleteCharacterStat(categoryId, statId),
+    onUpdateCharacterStatName: (categoryId, statId, name) =>
+      characterTokenController.updateCharacterStatName(categoryId, statId, name),
+    onUpdateCharacterStatValue: (categoryId, statId, value) =>
+      characterTokenController.updateCharacterStatValue(categoryId, statId, value),
+    onAddCharacterBackgroundEntry: () => characterTokenController.addCharacterBackgroundEntry(),
+    onDeleteCharacterBackgroundEntry: (entryId) => characterTokenController.deleteCharacterBackgroundEntry(entryId),
+    onUpdateCharacterBackgroundTitle: (entryId, title) =>
+      characterTokenController.updateCharacterBackgroundTitle(entryId, title),
+    onUpdateCharacterBackgroundText: (entryId, text) =>
+      characterTokenController.updateCharacterBackgroundText(entryId, text),
     isEditingTokenName: tokenNameEditing && canEditToken,
     clearTokenNameEditing: () => {
       tokenNameEditing = false;
@@ -1506,7 +1567,7 @@ function openTokenInspector(characterId: string): void {
   inspectedItemInstanceId = null;
   inspectedBackpackItemId = null;
   tokenNameEditing = false;
-  tokenInspectorTab = "profile";
+  tokenInspectorTab = "stats";
   closeWarehouseOverlay();
   avatarEditorTitle.textContent = "调整角色头像";
   updateTokenInspector();
@@ -1517,7 +1578,7 @@ function openTokenInspector(characterId: string): void {
 function closeTokenInspector(): void {
   inspectedCharacterId = null;
   tokenNameEditing = false;
-  tokenInspectorTab = "profile";
+  tokenInspectorTab = "stats";
   updateTokenInspector();
 }
 
@@ -1882,6 +1943,10 @@ function deleteCharacter(characterId: string): void {
   characterTokenController.deleteCharacter(characterId);
 }
 
+function duplicateCharacter(characterId: string): void {
+  characterTokenController.duplicateCharacter(characterId);
+}
+
 function toggleDoorAtEdge(edge: { type: WallEdgeType; x: number; y: number }): void {
   logicMapController.toggleDoorAtEdge(edge);
 }
@@ -2128,8 +2193,10 @@ installControlEventHandlers({
     itemSplitSlider,
     cancelItemSplitButton,
     confirmItemSplitButton,
+    tokenInspectorTabStats,
     tokenInspectorTabProfile,
     tokenInspectorTabBackpack,
+    tokenInspectorTabBackground,
     warehouseOverlay,
     closeWarehouseOverlayButton,
   },

@@ -1,5 +1,6 @@
 import type { DiceSides } from "../core/appState";
 import type { AppMode, EditMode, LogicTool, SceneItemInstance, SceneToken } from "../core/types";
+import { installBackdropDismiss } from "../modules/ui/backdropDismiss";
 
 export function installControlEventHandlers(options: {
   elements: {
@@ -69,8 +70,10 @@ export function installControlEventHandlers(options: {
     itemSplitSlider: HTMLInputElement;
     cancelItemSplitButton: HTMLButtonElement;
     confirmItemSplitButton: HTMLButtonElement;
+    tokenInspectorTabStats: HTMLButtonElement;
     tokenInspectorTabProfile: HTMLButtonElement;
     tokenInspectorTabBackpack: HTMLButtonElement;
+    tokenInspectorTabBackground: HTMLButtonElement;
     warehouseOverlay: HTMLElement;
     closeWarehouseOverlayButton: HTMLButtonElement;
   };
@@ -142,7 +145,7 @@ export function installControlEventHandlers(options: {
     closeItemSplitPopover: () => void;
     updateItemSplitSlider: (value: number) => void;
     confirmItemSplit: () => void;
-    setTokenInspectorTab: (tab: "profile" | "backpack") => void;
+    setTokenInspectorTab: (tab: "stats" | "profile" | "backpack" | "background") => void;
     closeWarehouseOverlay: () => void;
     updateCharacterIsNpc: (isNpc: boolean) => void;
     closeTokenInspector: () => void;
@@ -337,11 +340,7 @@ export function installControlEventHandlers(options: {
   });
   elements.resetItemIconAdjustmentButton.addEventListener("click", actions.resetSelectedItemIconAdjustment);
   elements.closeItemDefinitionInspectorButton.addEventListener("click", actions.closeItemDefinitionInspector);
-  elements.itemDefinitionInspectorOverlay.addEventListener("click", (event) => {
-    if (event.target === elements.itemDefinitionInspectorOverlay) {
-      actions.closeItemDefinitionInspector();
-    }
-  });
+  installBackdropDismiss(elements.itemDefinitionInspectorOverlay, actions.closeItemDefinitionInspector);
   elements.deleteItemDefinitionButton.addEventListener("click", () => {
     const definitionId = state.inspectedItemDefinitionId();
     if (definitionId && state.isAdmin()) {
@@ -349,11 +348,7 @@ export function installControlEventHandlers(options: {
     }
   });
   elements.closeItemInstanceInspectorButton.addEventListener("click", actions.closeItemInstanceInspector);
-  elements.itemInstanceInspectorOverlay.addEventListener("click", (event) => {
-    if (event.target === elements.itemInstanceInspectorOverlay) {
-      actions.closeItemInstanceInspector();
-    }
-  });
+  installBackdropDismiss(elements.itemInstanceInspectorOverlay, actions.closeItemInstanceInspector);
   elements.itemQuantityInput.addEventListener("change", () => {
     actions.stopItemQuantityEditing();
   });
@@ -386,24 +381,22 @@ export function installControlEventHandlers(options: {
   elements.itemSplitSlider.addEventListener("input", () => {
     actions.updateItemSplitSlider(Number.parseInt(elements.itemSplitSlider.value, 10));
   });
+  elements.tokenInspectorTabStats.addEventListener("click", () => {
+    actions.setTokenInspectorTab("stats");
+  });
   elements.tokenInspectorTabProfile.addEventListener("click", () => {
     actions.setTokenInspectorTab("profile");
   });
   elements.tokenInspectorTabBackpack.addEventListener("click", () => {
     actions.setTokenInspectorTab("backpack");
   });
+  elements.tokenInspectorTabBackground.addEventListener("click", () => {
+    actions.setTokenInspectorTab("background");
+  });
   elements.closeWarehouseOverlayButton.addEventListener("click", actions.closeWarehouseOverlay);
-  elements.warehouseOverlay.addEventListener("click", (event) => {
-    if (event.target === elements.warehouseOverlay) {
-      actions.closeWarehouseOverlay();
-    }
-  });
+  installBackdropDismiss(elements.warehouseOverlay, actions.closeWarehouseOverlay);
   elements.closeTokenInspectorButton.addEventListener("click", actions.closeTokenInspector);
-  elements.tokenInspectorOverlay.addEventListener("click", (event) => {
-    if (event.target === elements.tokenInspectorOverlay) {
-      actions.closeTokenInspector();
-    }
-  });
+  installBackdropDismiss(elements.tokenInspectorOverlay, actions.closeTokenInspector);
   elements.deleteTokenInstanceButton.addEventListener("click", () => {
     const token = state.inspectedTokenInstance();
     if (token && state.isAdmin()) {

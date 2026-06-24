@@ -1,7 +1,7 @@
 import { handleChatDice } from "../handlers/chat/dice.mjs";
 import { handleHello } from "../handlers/hello.mjs";
 import { handlePong } from "../handlers/pong.mjs";
-import { handleSceneCharacterAdd, handleSceneCharacterDelete, handleSceneCharacterUpdate } from "../handlers/scene/characters.mjs";
+import { handleSceneCharacterAdd, handleSceneCharacterBackgroundUpdate, handleSceneCharacterDelete, handleSceneCharacterStatsUpdate, handleSceneCharacterUpdate } from "../handlers/scene/characters.mjs";
 import { handleSceneItemDefinitionAdd, handleSceneItemDefinitionDelete, handleSceneItemDefinitionUpdate } from "../handlers/scene/items.mjs";
 import {
   handleSceneItemInstanceAdd,
@@ -31,6 +31,8 @@ const messageHandlers = {
   "scene:token-add": handleSceneTokenAdd,
   "scene:character-add": handleSceneCharacterAdd,
   "scene:character-update": handleSceneCharacterUpdate,
+  "scene:character-stats-update": handleSceneCharacterStatsUpdate,
+  "scene:character-background-update": handleSceneCharacterBackgroundUpdate,
   "scene:character-delete": handleSceneCharacterDelete,
   "scene:item-definition-add": handleSceneItemDefinitionAdd,
   "scene:item-definition-update": handleSceneItemDefinitionUpdate,

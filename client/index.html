@@ -219,57 +219,86 @@
               </button>
             </div>
             <form id="token-selection-form" class="token-selection-form">
-            <div id="token-profile-panel" class="token-inspector-tab-panel">
-            <div id="token-name-display" class="token-name-display">
-              <span id="token-name-value" class="token-name-value">角色</span>
-              <input id="token-name-input" class="token-name-inline-input" type="text" maxlength="24" autocomplete="off" hidden />
-              <button id="edit-token-name" class="icon-panel-action" type="button" aria-label="编辑角色姓名">✎</button>
-            </div>
-            <div id="token-npc-type-controls" class="token-npc-type-controls" hidden>
-              <label class="door-state-toggle">
-                <input id="token-npc-type-input" type="checkbox" />
-                <span>NPC 角色（无法登录，仅主持人可操控）</span>
-              </label>
-            </div>
-            <div class="panel-section">
-              <div class="panel-section-title">角色头像</div>
-              <label id="avatar-upload-button" class="primary-panel-action avatar-upload-button">
-                上传头像
-                <input id="avatar-upload-input" type="file" accept="image/*" />
-              </label>
-              <div id="avatar-adjust-controls" class="avatar-adjust-controls" hidden>
-                <button id="edit-avatar" type="button">编辑头像裁剪</button>
-                <button id="reset-avatar-adjustment" type="button">重置头像位置</button>
+            <div id="token-stats-panel" class="token-inspector-tab-panel">
+              <div class="token-inspector-tab-body">
+                <div id="token-stats-list" class="token-inspector-tab-scroll character-stat-categories" aria-live="polite"></div>
               </div>
             </div>
-            <div id="token-instance-actions" class="token-instance-actions" hidden>
-              <button id="delete-token-instance" type="button" class="destructive-panel-action">删除棋子</button>
-            </div>
-            <p id="token-panel-help" class="panel-help" hidden></p>
+            <div id="token-profile-panel" class="token-inspector-tab-panel" hidden>
+              <div class="token-inspector-tab-body">
+                <div class="token-inspector-tab-scroll">
+                  <div id="token-name-display" class="token-name-display">
+                    <span id="token-name-value" class="token-name-value">角色</span>
+                    <input id="token-name-input" class="token-name-inline-input" type="text" maxlength="24" autocomplete="off" hidden />
+                    <button id="edit-token-name" class="icon-panel-action" type="button" aria-label="编辑角色姓名">✎</button>
+                  </div>
+                  <div id="token-npc-type-controls" class="token-npc-type-controls" hidden>
+                    <label class="door-state-toggle">
+                      <input id="token-npc-type-input" type="checkbox" />
+                      <span>NPC 角色（无法登录，仅主持人可操控）</span>
+                    </label>
+                  </div>
+                  <div class="panel-section">
+                    <div class="panel-section-title">角色头像</div>
+                    <label id="avatar-upload-button" class="primary-panel-action avatar-upload-button">
+                      上传头像
+                      <input id="avatar-upload-input" type="file" accept="image/*" />
+                    </label>
+                    <div id="avatar-adjust-controls" class="avatar-adjust-controls" hidden>
+                      <button id="edit-avatar" type="button">编辑头像裁剪</button>
+                      <button id="reset-avatar-adjustment" type="button">重置头像位置</button>
+                    </div>
+                  </div>
+                  <div id="token-instance-actions" class="token-instance-actions" hidden>
+                    <button id="delete-token-instance" type="button" class="destructive-panel-action">删除棋子</button>
+                  </div>
+                </div>
+                <p id="token-panel-help" class="token-inspector-tab-footer panel-help" hidden></p>
+              </div>
             </div>
             <div id="token-backpack-panel" class="token-inspector-tab-panel" hidden>
-              <div class="panel-section">
-                <div id="token-backpack-title" class="panel-section-title">角色背包</div>
-                <div id="token-backpack-list" class="warehouse-list" aria-live="polite"></div>
-                <p id="token-backpack-help" class="panel-help">双击条目可查看详情。</p>
+              <div class="token-inspector-tab-body">
+                <div class="token-inspector-tab-scroll">
+                  <div id="token-backpack-title" class="token-inspector-tab-heading">背包</div>
+                  <div id="token-backpack-list" class="warehouse-list" aria-live="polite"></div>
+                </div>
+                <p id="token-backpack-help" class="token-inspector-tab-footer panel-help">双击条目可查看详情。</p>
+              </div>
+            </div>
+            <div id="token-background-panel" class="token-inspector-tab-panel" hidden>
+              <div class="token-inspector-tab-body">
+                <div id="token-background-list" class="token-inspector-tab-scroll character-background-entries" aria-live="polite"></div>
               </div>
             </div>
             </form>
           </div>
           <div id="token-inspector-tabs" class="inspector-bookmarks" role="tablist" aria-label="角色检视切页">
-            <button id="token-inspector-tab-profile" type="button" class="inspector-bookmark is-active" role="tab" aria-selected="true" aria-label="角色信息" data-tab="profile">
+            <button id="token-inspector-tab-stats" type="button" class="inspector-bookmark is-active" role="tab" aria-selected="true" aria-label="数值" data-tab="stats">
               <svg class="inspector-bookmark-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2" />
-                <path d="M5 20c0-4 3.5-7 7-7s7 3 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                <path d="M4 19V5M10 19V9M16 19V13M22 19V7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
               </svg>
-              <span class="inspector-bookmark-label">角色信息</span>
+              <span class="inspector-bookmark-label">数值</span>
             </button>
-            <button id="token-inspector-tab-backpack" type="button" class="inspector-bookmark" role="tab" aria-selected="false" aria-label="角色背包" data-tab="backpack">
+            <button id="token-inspector-tab-backpack" type="button" class="inspector-bookmark" role="tab" aria-selected="false" aria-label="背包" data-tab="backpack">
               <svg class="inspector-bookmark-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path d="M6 8h12v13H6V8Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
                 <path d="M9 8V6a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
               </svg>
-              <span class="inspector-bookmark-label">角色背包</span>
+              <span class="inspector-bookmark-label">背包</span>
+            </button>
+            <button id="token-inspector-tab-background" type="button" class="inspector-bookmark" role="tab" aria-selected="false" aria-label="背景" data-tab="background">
+              <svg class="inspector-bookmark-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+              </svg>
+              <span class="inspector-bookmark-label">背景</span>
+            </button>
+            <button id="token-inspector-tab-profile" type="button" class="inspector-bookmark" role="tab" aria-selected="false" aria-label="设置" data-tab="profile">
+              <svg class="inspector-bookmark-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2" />
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+              <span class="inspector-bookmark-label">设置</span>
             </button>
           </div>
         </div>

@@ -99,7 +99,7 @@ export function createAppState() {
     previewWallTargetBlocked: true,
     imageSnapshotVersion: 0,
     tokenNameEditing: false,
-    tokenInspectorTab: "profile" as TokenInspectorTab,
+    tokenInspectorTab: "stats" as TokenInspectorTab,
     warehouseOverlayCell: null as Cell | null,
     warehouseOverlayMode: null as WarehouseOverlayMode | null,
     pendingTokenNames: new Map<string, string>(),

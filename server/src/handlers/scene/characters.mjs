@@ -1,9 +1,22 @@
 import { syncClientIdentityForToken } from "../../clients/identity.mjs";
 import { normalizeTokenAvatarFields } from "../../normalization/images.mjs";
-import { normalizeSceneCharacter, normalizeTokenName } from "../../normalization/tokens.mjs";
+import { normalizeCharacterStatCategories, normalizeCharacterBackgroundEntries, normalizeSceneCharacter, normalizeTokenName, statCategoriesStructureMatches } from "../../normalization/tokens.mjs";
 import { broadcastScenePatch } from "../../scene/broadcast.mjs";
 import { syncTokenFromCharacter } from "../../scene/sync.mjs";
 import { sceneBackpackItems, sceneCharacters, sceneTokens } from "../../state/index.mjs";
+
+function broadcastCharacterUpdate(character) {
+  syncTokenFromCharacter(character);
+  syncClientIdentityForToken(character);
+
+  const patch = { characterUpserts: [{ ...character }] };
+  const token = sceneTokens.find((candidate) => candidate.id === character.id);
+  if (token) {
+    patch.tokenUpserts = [{ ...token, cell: { ...token.cell } }];
+  }
+
+  broadcastScenePatch(patch);
+}
 
 export function handleSceneCharacterAdd(client, message) {
   if (client.identity.type !== "admin") {
@@ -38,17 +51,68 @@ export function handleSceneCharacterUpdate(client, message) {
   if (isAdmin) {
     character.isNpc = incomingCharacter.isNpc === true;
   }
-  syncTokenFromCharacter(character);
   client.lastSeenAt = Date.now();
-  syncClientIdentityForToken(character);
+  broadcastCharacterUpdate(character);
+}
 
-  const patch = { characterUpserts: [{ ...character }] };
-  const token = sceneTokens.find((candidate) => candidate.id === character.id);
-  if (token) {
-    patch.tokenUpserts = [{ ...token, cell: { ...token.cell } }];
+export function handleSceneCharacterStatsUpdate(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
   }
 
-  broadcastScenePatch(patch);
+  const characterId = String(message.characterId ?? "");
+  const character = sceneCharacters.find((candidate) => candidate.id === characterId);
+  if (!character) {
+    return;
+  }
+
+  const scope = message.scope === "values" ? "values" : "structure";
+  const existingCategories = character.statCategories ?? [];
+
+  if (scope === "values") {
+    const incomingCategories = normalizeCharacterStatCategories(message.statCategories);
+    if (!statCategoriesStructureMatches(existingCategories, incomingCategories)) {
+      return;
+    }
+
+    if (incomingCategories.length > 0) {
+      character.statCategories = incomingCategories;
+    } else {
+      delete character.statCategories;
+    }
+  } else {
+    const incomingCategories = normalizeCharacterStatCategories(message.statCategories);
+    if (incomingCategories.length > 0) {
+      character.statCategories = incomingCategories;
+    } else {
+      delete character.statCategories;
+    }
+  }
+
+  client.lastSeenAt = Date.now();
+  broadcastCharacterUpdate(character);
+}
+
+export function handleSceneCharacterBackgroundUpdate(client, message) {
+  if (client.identity.type !== "admin") {
+    return;
+  }
+
+  const characterId = String(message.characterId ?? "");
+  const character = sceneCharacters.find((candidate) => candidate.id === characterId);
+  if (!character) {
+    return;
+  }
+
+  const incomingEntries = normalizeCharacterBackgroundEntries(message.backgroundEntries);
+  if (incomingEntries.length > 0) {
+    character.backgroundEntries = incomingEntries;
+  } else {
+    delete character.backgroundEntries;
+  }
+
+  client.lastSeenAt = Date.now();
+  broadcastCharacterUpdate(character);
 }
 
 export function handleSceneCharacterDelete(client, message) {

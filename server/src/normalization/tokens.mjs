@@ -20,4 +20,11 @@ export function normalizeSceneToken(token) {
   };
 }
 
-export { normalizeSceneCharacter, normalizeTokenName } from "./characters.mjs";
+export {
+  normalizeSceneCharacter,
+  normalizeTokenName,
+  normalizeCharacterStatCategories,
+  normalizeCharacterBackgroundEntries,
+  statCategoriesStructureMatches,
+  STATS_PER_CATEGORY,
+} from "./characters.mjs";

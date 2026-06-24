@@ -110,7 +110,7 @@ export function renderWarehouseList(options: WarehouseListOptions): void {
 
   if (items.length === 0) {
     const empty = document.createElement("div");
-    empty.className = "warehouse-empty";
+    empty.className = "warehouse-empty token-inspector-empty";
     empty.textContent = "暂无物品";
     container.append(empty);
   } else {

@@ -59,6 +59,24 @@ export type SceneImage = {
 
 export type SceneImageSnapshot = Omit<SceneImage, "image">;
 
+export type CharacterStat = {
+  id: string;
+  name: string;
+  value: number;
+};
+
+export type CharacterStatCategory = {
+  id: string;
+  name: string;
+  stats: CharacterStat[];
+};
+
+export type CharacterBackgroundEntry = {
+  id: string;
+  title: string;
+  text: string;
+};
+
 export type SceneCharacter = {
   id: string;
   name: string;
@@ -68,6 +86,8 @@ export type SceneCharacter = {
   avatarScale?: number;
   avatarOffsetX?: number;
   avatarOffsetY?: number;
+  statCategories?: CharacterStatCategory[];
+  backgroundEntries?: CharacterBackgroundEntry[];
 };
 
 export type SceneToken = SceneCharacter & {
@@ -107,7 +127,9 @@ export type WarehouseItemEntry = {
 
 export type WarehouseOverlayMode = "single" | "transfer";
 
-export type TokenInspectorTab = "profile" | "backpack";
+export type TokenInspectorTab = "stats" | "backpack" | "background" | "profile";
+
+export type CharacterStatsUpdateScope = "structure" | "values";
 
 export type SceneDoor = {
   type: WallEdgeType;

@@ -217,16 +217,19 @@ function createCharacterRow(options: {
   tokens: SceneToken[];
   avatarImages: Map<string, { src: string; image: HTMLImageElement }>;
   isAdmin: boolean;
+  duplicateCharacter: (characterId: string) => void;
   deleteCharacter: (characterId: string) => void;
   openTokenInspector: (characterId: string) => void;
 }): HTMLDivElement {
-  const { character, tokens, avatarImages, isAdmin, deleteCharacter, openTokenInspector } = options;
+  const { character, tokens, avatarImages, isAdmin, duplicateCharacter, deleteCharacter, openTokenInspector } = options;
   const row = document.createElement("div");
   const entry = document.createElement("button");
   const avatar = document.createElement("span");
   const text = document.createElement("span");
   const name = document.createElement("span");
   const status = document.createElement("span");
+  const actions = document.createElement("div");
+  const copyButton = document.createElement("button");
   const deleteButton = document.createElement("button");
   const isOnMap = tokens.some((token) => token.id === character.id);
   const avatarImage = avatarImages.get(character.id);
@@ -268,6 +271,18 @@ function createCharacterRow(options: {
     avatar.textContent = character.name.trim().slice(0, 1).toUpperCase() || "P";
   }
 
+  actions.className = "character-row-actions";
+
+  copyButton.type = "button";
+  copyButton.className = "copy-character-button";
+  copyButton.setAttribute("aria-label", `复制角色 ${character.name}`);
+  copyButton.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  copyButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    duplicateCharacter(character.id);
+  });
+
   deleteButton.type = "button";
   deleteButton.className = "delete-character-button";
   deleteButton.setAttribute("aria-label", `删除角色 ${character.name}`);
@@ -291,7 +306,8 @@ function createCharacterRow(options: {
 
   text.append(name, status);
   entry.append(avatar, text);
-  row.append(entry, deleteButton);
+  actions.append(copyButton, deleteButton);
+  row.append(entry, actions);
   return row;
 }
 
@@ -315,6 +331,7 @@ function renderCharacterList(
     tokens: SceneToken[];
     avatarImages: Map<string, { src: string; image: HTMLImageElement }>;
     isAdmin: boolean;
+    duplicateCharacter: (characterId: string) => void;
     deleteCharacter: (characterId: string) => void;
     openTokenInspector: (characterId: string) => void;
   },
@@ -336,6 +353,7 @@ function renderCharacterList(
       tokens: options.tokens,
       avatarImages: options.avatarImages,
       isAdmin: options.isAdmin,
+      duplicateCharacter: options.duplicateCharacter,
       deleteCharacter: options.deleteCharacter,
       openTokenInspector: options.openTokenInspector,
     }),
@@ -352,6 +370,7 @@ function renderCharacterList(
         tokens: options.tokens,
         avatarImages: options.avatarImages,
         isAdmin: options.isAdmin,
+        duplicateCharacter: options.duplicateCharacter,
         deleteCharacter: options.deleteCharacter,
         openTokenInspector: options.openTokenInspector,
       }),
@@ -379,6 +398,7 @@ export class CharacterPanelController {
       avatarImages: () => Map<string, { src: string; image: HTMLImageElement }>;
     },
     private readonly actions: {
+      duplicateCharacter: (characterId: string) => void;
       deleteCharacter: (characterId: string) => void;
       openTokenInspector: (characterId: string) => void;
     },
@@ -420,6 +440,7 @@ export class CharacterPanelController {
       tokens,
       avatarImages,
       isAdmin,
+      duplicateCharacter: this.actions.duplicateCharacter,
       deleteCharacter: this.actions.deleteCharacter,
       openTokenInspector: this.actions.openTokenInspector,
     });

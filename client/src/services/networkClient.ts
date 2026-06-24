@@ -1,6 +1,7 @@
 import type {
   Cell,
   ChatMessage,
+  CharacterStatsUpdateScope,
   DiceChatMessage,
   Identity,
   SceneCharacter,
@@ -172,6 +173,30 @@ export class NetworkClient {
     this.send({
       type: "scene:character-update",
       character,
+    });
+  }
+
+  sendCharacterStatsUpdated(
+    characterId: string,
+    statCategories: SceneCharacter["statCategories"],
+    scope: CharacterStatsUpdateScope,
+  ): void {
+    this.send({
+      type: "scene:character-stats-update",
+      characterId,
+      statCategories: statCategories ?? [],
+      scope,
+    });
+  }
+
+  sendCharacterBackgroundUpdated(
+    characterId: string,
+    backgroundEntries: SceneCharacter["backgroundEntries"],
+  ): void {
+    this.send({
+      type: "scene:character-background-update",
+      characterId,
+      backgroundEntries: backgroundEntries ?? [],
     });
   }
 

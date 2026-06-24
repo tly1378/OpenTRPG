@@ -93,7 +93,7 @@ export function getWarehouseLabel(
 
   const characterId = parseBackpackWarehouseId(warehouseId);
   if (characterId) {
-    return characterName ? `${characterName}的背包` : "角色背包";
+    return characterName ? `${characterName}的背包` : "背包";
   }
 
   return "仓库";

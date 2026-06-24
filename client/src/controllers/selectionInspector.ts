@@ -1,4 +1,6 @@
 import type { Cell, SceneCharacter, SceneDoor, SceneImage, SceneItemDefinition, SceneItemInstance, SceneBackpackItem, SceneRoom, SceneToken, TokenInspectorTab, WarehouseItemEntry, WarehouseOverlayMode } from "../core/types";
+import { renderCharacterStatsPanel } from "../modules/scene/characterStatsUi";
+import { renderCharacterBackgroundPanel } from "../modules/scene/characterBackgroundUi";
 import { renderWarehouseList } from "../modules/warehouses/warehouseUi";
 import { backpackWarehouseId, getWarehouseLabel, groundWarehouseId, groundWarehouseLabel } from "../modules/warehouses/warehouses";
 import { buildItemDisplayLabel, buildItemStackDescription, getItemStackForInstance, type ItemStack } from "../modules/items/itemStacks";
@@ -90,13 +92,19 @@ export function renderTokenInspector(options: {
     tokenPanelHelp: HTMLParagraphElement;
     tokenNpcTypeControls: HTMLDivElement;
     tokenNpcTypeInput: HTMLInputElement;
+    tokenInspectorTabStats: HTMLButtonElement;
     tokenInspectorTabProfile: HTMLButtonElement;
     tokenInspectorTabBackpack: HTMLButtonElement;
+    tokenInspectorTabBackground: HTMLButtonElement;
+    tokenStatsPanel: HTMLDivElement;
+    tokenStatsList: HTMLDivElement;
     tokenProfilePanel: HTMLDivElement;
     tokenBackpackPanel: HTMLDivElement;
     tokenBackpackTitle: HTMLDivElement;
     tokenBackpackList: HTMLDivElement;
     tokenBackpackHelp: HTMLParagraphElement;
+    tokenBackgroundPanel: HTMLDivElement;
+    tokenBackgroundList: HTMLDivElement;
   };
   character: SceneCharacter | null;
   tokenInstance: SceneToken | null;
@@ -110,6 +118,20 @@ export function renderTokenInspector(options: {
   canInspectToken: boolean;
   canControlToken: boolean;
   isAdmin: boolean;
+  canEditStatStructure: boolean;
+  canEditStatValues: boolean;
+  canEditBackground: boolean;
+  onAddCharacterStatCategory: () => void;
+  onDeleteCharacterStatCategory: (categoryId: string) => void;
+  onUpdateCharacterStatCategoryName: (categoryId: string, name: string) => void;
+  onAddCharacterStat: (categoryId: string) => void;
+  onDeleteCharacterStat: (categoryId: string, statId: string) => void;
+  onUpdateCharacterStatName: (categoryId: string, statId: string, name: string) => void;
+  onUpdateCharacterStatValue: (categoryId: string, statId: string, value: number) => void;
+  onAddCharacterBackgroundEntry: () => void;
+  onDeleteCharacterBackgroundEntry: (entryId: string) => void;
+  onUpdateCharacterBackgroundTitle: (entryId: string, title: string) => void;
+  onUpdateCharacterBackgroundText: (entryId: string, text: string) => void;
   isEditingTokenName: boolean;
   clearTokenNameEditing: () => void;
 }): void {
@@ -123,15 +145,53 @@ export function renderTokenInspector(options: {
 
   elements.tokenInspectorOverlay.hidden = false;
 
-  const isProfileTab = options.activeTab === "profile";
+  const canShowProfileTab = options.canControlToken;
+  elements.tokenInspectorTabProfile.hidden = !canShowProfileTab;
+
+  const activeTab = !canShowProfileTab && options.activeTab === "profile" ? "stats" : options.activeTab;
+  const isStatsTab = activeTab === "stats";
+  const isProfileTab = activeTab === "profile";
+  const isBackpackTab = activeTab === "backpack";
+  const isBackgroundTab = activeTab === "background";
+
+  elements.tokenInspectorTabStats.classList.toggle("is-active", isStatsTab);
+  elements.tokenInspectorTabStats.setAttribute("aria-selected", String(isStatsTab));
   elements.tokenInspectorTabProfile.classList.toggle("is-active", isProfileTab);
   elements.tokenInspectorTabProfile.setAttribute("aria-selected", String(isProfileTab));
-  elements.tokenInspectorTabBackpack.classList.toggle("is-active", !isProfileTab);
-  elements.tokenInspectorTabBackpack.setAttribute("aria-selected", String(!isProfileTab));
+  elements.tokenInspectorTabBackpack.classList.toggle("is-active", isBackpackTab);
+  elements.tokenInspectorTabBackpack.setAttribute("aria-selected", String(isBackpackTab));
+  elements.tokenInspectorTabBackground.classList.toggle("is-active", isBackgroundTab);
+  elements.tokenInspectorTabBackground.setAttribute("aria-selected", String(isBackgroundTab));
+  elements.tokenStatsPanel.hidden = !isStatsTab;
   elements.tokenProfilePanel.hidden = !isProfileTab;
-  elements.tokenBackpackPanel.hidden = isProfileTab;
+  elements.tokenBackpackPanel.hidden = !isBackpackTab;
+  elements.tokenBackgroundPanel.hidden = !isBackgroundTab;
 
-  elements.tokenNameDisplay.hidden = false;
+  renderCharacterStatsPanel({
+    listContainer: elements.tokenStatsList,
+    character,
+    canEditStructure: options.canEditStatStructure,
+    canEditValues: options.canEditStatValues,
+    onAddCharacterStatCategory: options.onAddCharacterStatCategory,
+    onDeleteCharacterStatCategory: options.onDeleteCharacterStatCategory,
+    onUpdateCharacterStatCategoryName: options.onUpdateCharacterStatCategoryName,
+    onAddCharacterStat: options.onAddCharacterStat,
+    onDeleteCharacterStat: options.onDeleteCharacterStat,
+    onUpdateCharacterStatName: options.onUpdateCharacterStatName,
+    onUpdateCharacterStatValue: options.onUpdateCharacterStatValue,
+  });
+
+  renderCharacterBackgroundPanel({
+    listContainer: elements.tokenBackgroundList,
+    character,
+    canEdit: options.canEditBackground,
+    onAddCharacterBackgroundEntry: options.onAddCharacterBackgroundEntry,
+    onDeleteCharacterBackgroundEntry: options.onDeleteCharacterBackgroundEntry,
+    onUpdateCharacterBackgroundTitle: options.onUpdateCharacterBackgroundTitle,
+    onUpdateCharacterBackgroundText: options.onUpdateCharacterBackgroundText,
+  });
+
+  elements.tokenNameDisplay.hidden = !isProfileTab;
   elements.tokenNameValue.textContent = character.name;
   elements.tokenNameValue.hidden = options.isEditingTokenName;
   elements.editTokenNameButton.disabled = !options.canControlToken;
@@ -142,20 +202,20 @@ export function renderTokenInspector(options: {
   elements.avatarAdjustControls.hidden = !character.avatarSrc;
   elements.editAvatarButton.disabled = !options.canControlToken;
   elements.resetAvatarAdjustmentButton.disabled = !options.canControlToken;
-  elements.tokenInstanceActions.hidden = !options.isAdmin || !options.tokenInstance;
+  elements.tokenInstanceActions.hidden = !options.isAdmin || !options.tokenInstance || !isProfileTab;
   elements.deleteTokenInstanceButton.disabled = !options.isAdmin || !options.tokenInstance;
-  elements.tokenNpcTypeControls.hidden = !options.isAdmin;
+  elements.tokenNpcTypeControls.hidden = !options.isAdmin || !isProfileTab;
   elements.tokenNpcTypeInput.checked = Boolean(character.isNpc);
   elements.tokenNpcTypeInput.disabled = !options.isAdmin;
 
   if (character.isNpc && !options.canControlToken) {
-    elements.tokenPanelHelp.hidden = false;
+    elements.tokenPanelHelp.hidden = !isProfileTab;
     elements.tokenPanelHelp.textContent = "NPC 只能由主持人操控。";
   } else if (options.canControlToken) {
     elements.tokenPanelHelp.hidden = true;
     elements.tokenPanelHelp.textContent = "";
   } else {
-    elements.tokenPanelHelp.hidden = false;
+    elements.tokenPanelHelp.hidden = !isProfileTab;
     elements.tokenPanelHelp.textContent = "只有主持人或该角色玩家可以修改姓名。";
   }
 
@@ -410,7 +470,7 @@ export function renderWarehouseOverlay(options: {
   elements.warehouseTransferGroundTitle.textContent = groundLabel;
   elements.warehouseTransferBackpackTitle.textContent = options.backpackCharacterId
     ? getWarehouseLabel(backpackWarehouseId(options.backpackCharacterId), options.backpackCharacterName)
-    : "角色背包";
+    : "背包";
 
   renderWarehouseList({
     container: elements.warehouseTransferGroundList,
@@ -437,7 +497,7 @@ export function renderWarehouseOverlay(options: {
   });
 
   if (!options.backpackCharacterId) {
-    elements.warehouseOverlayHelp.textContent = "以玩家身份登录后才能使用角色背包。";
+    elements.warehouseOverlayHelp.textContent = "以玩家身份登录后才能使用背包。";
   } else if (options.canTransfer) {
     elements.warehouseOverlayHelp.textContent = "拖动物品可在两个仓库之间转移；双击条目可查看详情。";
   } else {
